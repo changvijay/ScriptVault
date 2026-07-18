@@ -1,0 +1,163 @@
+# App Development Prompt
+
+**Your Role:**
+Senior Mobile App Developer, UI/UX Designer, and System Architect.
+
+## Short Basic Instruction
+
+Design and develop a modern offline script and note management application with goal tracking and progress monitoring.
+
+## What You Should Do
+
+Create a complete application architecture, database design, UI/UX flow, folder structure, and development roadmap for an offline-first app.
+
+### Core Features
+
+### 1. Script Management
+
+* Create, edit, and delete scripts.
+* Each script contains:
+
+  * Title
+  * Script/Notes
+  * Created Date
+  * Last Modified Date
+  * reference
+
+### 2. Voice Notes
+
+* Record voice notes.
+* Save recordings locally.
+* Attach voice notes to scripts.
+
+### 3. Video Notes
+
+* Record or attach video notes.
+* Save videos locally.
+* Link videos to scripts.
+
+### 4. Categories
+
+* Users can create unlimited custom categories.
+* Edit and delete categories.
+* Assign one or multiple categories to each script.
+
+### 5. Deadlines
+
+* Optional deadline for every script.
+* View upcoming deadlines.
+* Highlight overdue scripts.
+
+### 6. Search & Filter
+
+* Search by title.
+* Search inside notes.
+* Filter by category.
+* Filter by completion status.
+* Filter by deadline.
+
+### 7. Script Status
+
+Each script can be marked as:
+
+* Not Started
+* In Progress
+* Completed
+
+### 8. Goal System
+
+Allow users to create personal goals such as:
+
+* Complete 10 scripts this month.
+* Finish 3 scripts this week.
+* Write for 30 minutes every day.
+* Create custom goals.
+
+For each goal:
+
+* Goal title
+* Target value
+* Current progress
+* Deadline
+* Completion status
+
+### 9. Progress Tracking
+
+Include visual progress indicators such as:
+
+* Total Scripts
+* Completed Scripts
+* In Progress Scripts
+* Overdue Scripts
+* Percentage Completed
+* Goal Progress Bars
+* Weekly Progress
+* Monthly Progress
+
+### 10. Dashboard
+
+Display:
+
+* Total Scripts
+* Completed Scripts
+* Active Goals
+* Upcoming Deadlines
+* Recent Scripts
+* Progress Charts
+* Completion Percentage
+
+### 11. User Interface
+
+* Modern minimal design
+* Light Mode
+* Dark Mode
+* Responsive layout
+* Smooth animations
+* Simple navigation
+* Easy-to-use dashboard
+
+### 12. Local Storage
+
+* Store all data locally on the device.
+* No cloud synchronization.
+* No paid APIs.
+* No AI features.
+* Offline-first functionality.
+
+## Your Goal
+
+Build a clean, fast, and scalable offline application that helps users organize scripts, attach voice and video notes, manage deadlines, and stay motivated through goals and progress tracking.
+
+## Result
+
+Provide:
+
+* Complete feature list
+* Database schema
+* Folder structure
+* Screen-by-screen UI design
+* Navigation flow
+* Recommended technology stack
+* Local storage design
+* Development roadmap (MVP → Final Version)
+* Suggestions for future improvements that do not require paid services
+
+## Constraints
+
+* No AI features.
+* No cloud storage.
+* No paid APIs.
+* Offline-first.
+* Free and open-source technologies only.
+* Simple, maintainable, and scalable architecture.
+
+## Context
+
+Please use the following information before generating the solution:
+
+* Target Platform:
+* Preferred Framework:
+* Preferred Programming Language:
+* Local Database (SQLite, Hive, Isar, etc.):
+* Experience Level:
+* Additional Requirements:
