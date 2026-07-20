@@ -145,7 +145,7 @@ export default function ScriptsScreen() {
         renderItem={renderItem}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: bottomInset + 100 },
+          { paddingBottom: bottomInset + 172 },
         ]}
         ListEmptyComponent={
           <EmptyState

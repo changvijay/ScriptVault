@@ -427,7 +427,7 @@ export default function TodosScreen() {
         <FlatList
           data={filtered}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: bottomInset + 100, gap: 10 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: bottomInset + 174, gap: 10 }}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <TodoRow

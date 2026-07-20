@@ -155,7 +155,7 @@ export default function GoalsScreen() {
         data={[...active, ...completed]}
         keyExtractor={g => g.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: bottomInset + 100 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: bottomInset + 172 }}
         ListHeaderComponent={
           active.length === 0 && completed.length === 0 ? null : (
             <>
