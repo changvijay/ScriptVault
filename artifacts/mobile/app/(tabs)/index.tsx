@@ -15,6 +15,7 @@ import { StatCard } from '@/components/StatCard';
 import { ScriptCard } from '@/components/ScriptCard';
 import { GoalCard } from '@/components/GoalCard';
 import { EmptyState } from '@/components/EmptyState';
+import { MonthCalendar } from '@/components/MonthCalendar';
 import { router } from 'expo-router';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -23,7 +24,7 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { scripts, categories, goals } = useData();
+  const { scripts, categories, goals, todos } = useData();
 
   const now = new Date();
 
@@ -111,6 +112,16 @@ export default function DashboardScreen() {
             <StatCard label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? colors.destructive : colors.mutedForeground} small />
           </View>
         </View>
+      </View>
+
+      {/* Monthly Calendar */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+            Calendar
+          </Text>
+        </View>
+        <MonthCalendar scripts={scripts} todos={todos} categories={categories} />
       </View>
 
       {/* Goals */}
