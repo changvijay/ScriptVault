@@ -19,6 +19,18 @@ export interface VideoNote {
   createdAt: string;
 }
 
+export type AttachedFileType = 'image' | 'video' | 'audio';
+
+export interface AttachedFile {
+  id: string;
+  uri: string;
+  name: string;
+  type: AttachedFileType;
+  mimeType?: string;
+  size?: number;
+  createdAt: string;
+}
+
 export interface Script {
   id: string;
   title: string;
@@ -29,6 +41,7 @@ export interface Script {
   deadline: string | null; // YYYY-MM-DD
   voiceNotes: VoiceNote[];
   videoNotes: VideoNote[];
+  attachedFiles: AttachedFile[];
   createdAt: string;
   modifiedAt: string;
 }

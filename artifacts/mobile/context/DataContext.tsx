@@ -76,6 +76,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deadline: data.deadline ?? null,
       voiceNotes: data.voiceNotes ?? [],
       videoNotes: data.videoNotes ?? [],
+      attachedFiles: data.attachedFiles ?? [],
       createdAt: now,
       modifiedAt: now,
     };
