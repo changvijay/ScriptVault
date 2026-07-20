@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Script, Category, Goal } from '@/types';
+import { Script, Category, Goal, TodoItem } from '@/types';
 
 const SCRIPTS_KEY = '@scriptvault/scripts';
 const CATEGORIES_KEY = '@scriptvault/categories';
 const GOALS_KEY = '@scriptvault/goals';
+const TODOS_KEY = '@scriptvault/todos';
 
 export const generateId = () =>
   Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -19,6 +20,7 @@ interface DataContextType {
   scripts: Script[];
   categories: Category[];
   goals: Goal[];
+  todos: TodoItem[];
   loading: boolean;
   createScript: (data: Partial<Script>) => Promise<Script>;
   updateScript: (id: string, updates: Partial<Script>) => Promise<void>;
@@ -29,6 +31,10 @@ interface DataContextType {
   createGoal: (data: Partial<Goal>) => Promise<Goal>;
   updateGoal: (id: string, updates: Partial<Goal>) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
+  createTodo: (data: Partial<TodoItem>) => Promise<TodoItem>;
+  updateTodo: (id: string, updates: Partial<TodoItem>) => Promise<void>;
+  deleteTodo: (id: string) => Promise<void>;
+  toggleTodo: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -37,19 +43,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [scriptsStr, catsStr, goalsStr] = await Promise.all([
+        const [scriptsStr, catsStr, goalsStr, todosStr] = await Promise.all([
           AsyncStorage.getItem(SCRIPTS_KEY),
           AsyncStorage.getItem(CATEGORIES_KEY),
           AsyncStorage.getItem(GOALS_KEY),
+          AsyncStorage.getItem(TODOS_KEY),
         ]);
         if (scriptsStr) setScripts(JSON.parse(scriptsStr));
         if (catsStr) setCategories(JSON.parse(catsStr));
         if (goalsStr) setGoals(JSON.parse(goalsStr));
+        if (todosStr) setTodos(JSON.parse(todosStr));
       } catch (_) {
       } finally {
         setLoading(false);
@@ -63,6 +72,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(CATEGORIES_KEY, JSON.stringify(data));
   const saveGoals = (data: Goal[]) =>
     AsyncStorage.setItem(GOALS_KEY, JSON.stringify(data));
+  const saveTodos = (data: TodoItem[]) =>
+    AsyncStorage.setItem(TODOS_KEY, JSON.stringify(data));
 
   const createScript = async (data: Partial<Script>): Promise<Script> => {
     const now = new Date().toISOString();
@@ -154,13 +165,47 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await saveGoals(updated);
   };
 
+  const createTodo = async (data: Partial<TodoItem>): Promise<TodoItem> => {
+    const todo: TodoItem = {
+      id: generateId(),
+      text: data.text ?? '',
+      completed: false,
+      priority: data.priority ?? 'medium',
+      dueDate: data.dueDate ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [todo, ...todos];
+    setTodos(updated);
+    await saveTodos(updated);
+    return todo;
+  };
+
+  const updateTodo = async (id: string, updates: Partial<TodoItem>) => {
+    const updated = todos.map(t => (t.id === id ? { ...t, ...updates } : t));
+    setTodos(updated);
+    await saveTodos(updated);
+  };
+
+  const deleteTodo = async (id: string) => {
+    const updated = todos.filter(t => t.id !== id);
+    setTodos(updated);
+    await saveTodos(updated);
+  };
+
+  const toggleTodo = async (id: string) => {
+    const updated = todos.map(t => (t.id === id ? { ...t, completed: !t.completed } : t));
+    setTodos(updated);
+    await saveTodos(updated);
+  };
+
   return (
     <DataContext.Provider
       value={{
-        scripts, categories, goals, loading,
+        scripts, categories, goals, todos, loading,
         createScript, updateScript, deleteScript,
         createCategory, updateCategory, deleteCategory,
         createGoal, updateGoal, deleteGoal,
+        createTodo, updateTodo, deleteTodo, toggleTodo,
       }}
     >
       {children}

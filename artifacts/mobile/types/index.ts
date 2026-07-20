@@ -55,3 +55,12 @@ export interface Goal {
   completed: boolean;
   createdAt: string;
 }
+
+export interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  priority: 'low' | 'medium' | 'high';
+  dueDate: string | null; // YYYY-MM-DD
+  createdAt: string;
+}

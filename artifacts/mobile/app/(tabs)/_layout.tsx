@@ -19,6 +19,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'doc.text', selected: 'doc.text.fill' }} />
         <Label>Scripts</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="todos">
+        <Icon sf={{ default: 'checklist', selected: 'checklist' }} />
+        <Label>To-Do</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="goals">
         <Icon sf={{ default: 'flag', selected: 'flag.fill' }} />
         <Label>Goals</Label>
@@ -85,6 +89,18 @@ function ClassicTabLayout() {
               <SymbolView name="doc.text" tintColor={color} size={22} />
             ) : (
               <Feather name="file-text" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="todos"
+        options={{
+          title: 'To-Do',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="checklist" tintColor={color} size={22} />
+            ) : (
+              <Feather name="check-square" size={22} color={color} />
             ),
         }}
       />
