@@ -26,7 +26,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VIDEO"
-      ]
+      ],
+      "package": "com.changitsolutions.scripttracker"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -44,6 +45,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "31a1caaa-6182-432a-8983-1db8dc072d2d"
+      }
     }
   }
 }

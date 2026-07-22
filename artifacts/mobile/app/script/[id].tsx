@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData, generateId } from '@/context/DataContext';
 import { CategoryBadge } from '@/components/CategoryBadge';
 import { DatePickerModal } from '@/components/DatePickerModal';
+import { AIAssistant } from '@/components/AIAssistant';
 import { Script, ScriptStatus, VoiceNote, VideoNote, AttachedFile, AttachedFileType } from '@/types';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -483,6 +484,20 @@ export default function ScriptEditorScreen() {
             placeholderTextColor={colors.mutedForeground}
             multiline
             textAlignVertical="top"
+          />
+        </View>
+
+        {/* AI Assistant */}
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
+            AI Assistant
+          </Text>
+          <AIAssistant
+            scriptContent={notes}
+            onAccept={result => {
+              setNotes(result);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
           />
         </View>
 

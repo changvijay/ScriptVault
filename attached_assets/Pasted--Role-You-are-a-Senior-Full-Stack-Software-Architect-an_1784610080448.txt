@@ -1,0 +1,145 @@
+# Role
+
+You are a Senior Full-Stack Software Architect and UX Designer with expertise in AI integrations, API design, and modern web application development.
+
+## Task
+
+Design and implement an AI-powered workflow for a script editor application.
+
+## Requirements
+
+### 1. AI Settings
+
+Create a **Settings → AI Providers** page where users can securely save API keys for the following providers:
+
+* Google Gemini
+* Anthropic Claude
+* Groq
+* OpenRouter
+
+For each provider:
+
+* API Key input
+* Validate/Test Connection button
+* Connected/Disconnected status
+* Enable/Disable toggle
+
+### 2. Multiple Provider Support
+
+If the user configures two or more providers:
+
+* Allow switching between providers with a simple dropdown or model selector.
+* Remember the user's last selected provider.
+* Make changing providers fast and intuitive.
+* The currently selected provider should be used for all AI actions.
+
+Example:
+
+```
+AI Provider
+
+▼ Gemini 2.5 Pro
+Claude Opus
+Groq
+OpenRouter
+```
+
+---
+
+### 3. Add New Script Page
+
+Add an **AI Assistant** section containing actions such as:
+
+* ✨ Enhance Script
+* 🎣 Add Hooks
+* 📝 Fix Grammar
+* 🎯 Improve CTA
+* 😊 Improve Tone
+* ✂️ Shorten Script
+* 📈 Expand Script
+
+These actions should only be available if at least one valid AI provider has been configured.
+
+---
+
+### 4. AI Workflow
+
+When a user clicks an AI action:
+
+1. Determine the selected AI provider.
+2. Use the corresponding API key.
+3. Select the appropriate system prompt based on the chosen action.
+4. Send the request to the provider's API.
+5. Receive the generated response.
+6. Display the output in a preview/editor.
+7. Let the user choose one of the following:
+
+   * ✅ Accept & Save
+   * ❌ Discard
+   * 🔄 Regenerate
+
+The original script must never be overwritten automatically.
+
+---
+
+### 5. System Prompts
+
+Use high-quality system prompts for each action.
+
+**Enhance Script**
+
+> You are an expert script writer specializing in engaging, high-retention content. Improve the script while preserving its meaning, tone, and intent. Make it more compelling, natural, and readable. Return only the improved script.
+
+**Add Hooks**
+
+> You are a viral content strategist. Generate five unique, attention-grabbing hooks for this script. Each hook should capture attention within the first few seconds.
+
+**Fix Grammar**
+
+> You are a professional editor. Correct grammar, spelling, punctuation, and sentence structure while preserving the author's style. Return only the corrected script.
+
+**Improve CTA**
+
+> Rewrite the ending with a stronger, more persuasive call to action that matches the script's tone.
+
+**Shorten Script**
+
+> Rewrite the script to approximately 70% of its current length while preserving the key message.
+
+**Expand Script**
+
+> Expand the script with additional context, examples, and smoother transitions while maintaining the original style.
+
+---
+
+### 6. Architecture
+
+Implement a provider abstraction so all AI providers share a common interface.
+
+Example:
+
+```
+AIProvider
+ ├── GeminiProvider
+ ├── ClaudeProvider
+ ├── GroqProvider
+ └── OpenRouterProvider
+```
+
+The application should interact with a single AI service, regardless of which provider is selected.
+
+---
+
+### 7. User Experience
+
+* Securely store API keys.
+* Validate API keys before saving.
+* Show loading indicators during AI generation.
+* Display friendly error messages for failed API requests.
+* Allow regenerating responses.
+* Never overwrite the original content until the user explicitly accepts the generated result.
+* Keep the experience consistent across all supported AI providers.
+
+## Goal
+
+Build a scalable, provider-agnostic AI assistant that allows users to configure multiple AI providers, switch between them easily, perform AI-powered script improvements, preview the generated output, and decide whether to save or discard the changes.

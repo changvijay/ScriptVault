@@ -14,6 +14,7 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { DataProvider } from '@/context/DataContext';
+import { AIProvider } from '@/context/AIContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -57,7 +58,9 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <DataProvider>
-                <RootLayoutNav />
+                <AIProvider>
+                  <RootLayoutNav />
+                </AIProvider>
               </DataProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
