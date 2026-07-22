@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
 } from "react-native";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { useColors } from "@/hooks/useColors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useData } from "@/context/DataContext";
@@ -42,7 +43,7 @@ function isOverdue(dueDate: string | null, completed: boolean): boolean {
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { scripts, categories, goals, todos } = useData();
+  const { scripts, categories, goals, todos, updateScript, updateGoal } = useData();
 
   const now = new Date();
 
@@ -120,7 +121,7 @@ export default function DashboardScreen() {
   const bottomPad = Platform.OS === "web" ? 100 : insets.bottom + 100;
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={[styles.scroll, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
@@ -129,7 +130,7 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.header}>
         <View>
           <Text
             style={[
@@ -182,10 +183,11 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
-      </View>
+      </Animated.View>
 
       {/* ── Scripts KPI ── */}
-      <View
+      <Animated.View
+        entering={FadeInUp.delay(200).springify()}
         style={[
           styles.kpiCard,
           {
@@ -263,10 +265,10 @@ export default function DashboardScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       {/* ── Monthly Calendar ── */}
-      <View style={styles.section}>
+      <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text
             style={[
@@ -282,10 +284,11 @@ export default function DashboardScreen() {
           todos={todos}
           categories={categories}
         />
-      </View>
+      </Animated.View>
 
       {/* ── To-Do KPI ── */}
-      <View
+      <Animated.View
+        entering={FadeInUp.delay(400).springify()}
         style={[
           styles.kpiCard,
           {
@@ -393,11 +396,11 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
         )}
-      </View>
+      </Animated.View>
 
       {/* ── Goals ── */}
       {activeGoals.length > 0 && (
-        <View style={styles.section}>
+        <Animated.View entering={FadeInUp.delay(500).springify()} style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text
               style={[
@@ -423,14 +426,21 @@ export default function DashboardScreen() {
               key={goal.id}
               goal={goal}
               onPress={() => router.push("/(tabs)/goals")}
+              onIncrement={() => {
+                const newProgress = goal.currentProgress + 1;
+                updateGoal(goal.id, {
+                  currentProgress: newProgress,
+                  completed: newProgress >= goal.targetValue,
+                });
+              }}
             />
           ))}
-        </View>
+        </Animated.View>
       )}
 
       {/* ── Upcoming deadlines ── */}
       {upcomingDeadlines.length > 0 && (
-        <View style={styles.section}>
+        <Animated.View entering={FadeInUp.delay(600).springify()} style={styles.section}>
           <Text
             style={[
               styles.sectionTitle,
@@ -446,13 +456,13 @@ export default function DashboardScreen() {
               script={script}
               categories={categories}
               onPress={() => router.push(`/script/${script.id}`)}
+              onStatusChange={(status) => updateScript(script.id, { status })}
             />
           ))}
-        </View>
+        </Animated.View>
       )}
-
       {/* ── Recent scripts ── */}
-      <View style={styles.section}>
+      <Animated.View entering={FadeInUp.delay(700).springify()} style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text
             style={[
@@ -486,11 +496,12 @@ export default function DashboardScreen() {
               script={script}
               categories={categories}
               onPress={() => router.push(`/script/${script.id}`)}
+              onStatusChange={(status) => updateScript(script.id, { status })}
             />
           ))
         )}
-      </View>
-    </ScrollView>
+      </Animated.View>
+    </Animated.ScrollView>
   );
 }
 
@@ -519,17 +530,27 @@ const styles = StyleSheet.create({
   // KPI card shared
   kpiCard: {
     marginHorizontal: 16,
-    padding: 16,
-    gap: 12,
+    padding: 20,
+    gap: 16,
+    borderRadius: 24,
     borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.05,
+        shadowRadius: 20,
+      },
+      android: { elevation: 3 },
+    }),
   },
   kpiCardHead: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  kpiCardTitle: { fontSize: 16 },
-  kpiCardSub: { fontSize: 13 },
+  kpiCardTitle: { fontSize: 18, letterSpacing: -0.3 },
+  kpiCardSub: { fontSize: 14 },
 
   // Scripts KPI
   kpiBody: {
@@ -564,8 +585,7 @@ const styles = StyleSheet.create({
   highPriorityText: { fontSize: 13 },
   highPriorityLink: { fontSize: 13 },
 
-  // Sections
-  section: { gap: 4 },
+  section: { gap: 8, marginTop: 12 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -573,7 +593,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 4,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "700" },
+  sectionTitle: { fontSize: 19, fontWeight: "700", letterSpacing: -0.3 },
   sectionTitlePad: { paddingHorizontal: 20, marginBottom: 4 },
-  seeAll: { fontSize: 14 },
+  seeAll: { fontSize: 15 },
 });

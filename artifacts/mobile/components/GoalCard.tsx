@@ -8,11 +8,12 @@ import * as Haptics from 'expo-haptics';
 interface Props {
   goal: Goal;
   onPress: () => void;
+  onIncrement?: () => void;
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-export function GoalCard({ goal, onPress }: Props) {
+export function GoalCard({ goal, onPress, onIncrement }: Props) {
   const colors = useColors();
   const progress = Math.min(1, goal.targetValue > 0 ? goal.currentProgress / goal.targetValue : 0);
   const pct = Math.round(progress * 100);
@@ -119,9 +120,25 @@ export function GoalCard({ goal, onPress }: Props) {
         />
       </View>
 
-      <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-        {goal.currentProgress} of {goal.targetValue}
-      </Text>
+      <View style={styles.footer}>
+        <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+          {goal.currentProgress} of {goal.targetValue}
+        </Text>
+        
+        {onIncrement && !goal.completed && (
+          <Pressable
+            hitSlop={10}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onIncrement();
+            }}
+            style={[styles.incrementBtn, { backgroundColor: colors.primary + '15' }]}
+          >
+            <Feather name="plus" size={16} color={colors.primary} />
+          </Pressable>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -172,5 +189,14 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: 12,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  incrementBtn: {
+    padding: 6,
+    borderRadius: 8,
   },
 });

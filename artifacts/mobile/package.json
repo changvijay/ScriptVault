@@ -4,7 +4,8 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "cross-env PORT=8081 expo start --localhost --port 8081",
+    "dev": "cross-env PORT=8081 expo start --port 8081",
+    "dev:tunnel": "cross-env PORT=8081 expo start --tunnel --port 8081",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"

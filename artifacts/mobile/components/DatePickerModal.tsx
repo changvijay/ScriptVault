@@ -24,9 +24,10 @@ interface Props {
   date: Date | null;
   onConfirm: (date: Date) => void;
   onClose: () => void;
+  minDate?: Date;
 }
 
-export function DatePickerModal({ visible, date, onConfirm, onClose }: Props) {
+export function DatePickerModal({ visible, date, minDate, onConfirm, onClose }: Props) {
   const colors = useColors();
   const now = new Date();
   const [year, setYear] = useState(date ? date.getFullYear() : now.getFullYear());
@@ -35,6 +36,16 @@ export function DatePickerModal({ visible, date, onConfirm, onClose }: Props) {
 
   const maxDay = daysInMonth(month, year);
   const safeDay = Math.min(day, maxDay);
+
+  const selectedDate = new Date(year, month, safeDay);
+  let isInvalid = false;
+  if (minDate) {
+    const min = new Date(minDate);
+    min.setHours(0,0,0,0);
+    const sel = new Date(selectedDate);
+    sel.setHours(0,0,0,0);
+    isInvalid = sel < min;
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -45,8 +56,20 @@ export function DatePickerModal({ visible, date, onConfirm, onClose }: Props) {
           <Pressable onPress={onClose}>
             <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 15 }}>Cancel</Text>
           </Pressable>
-          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 16 }}>Set Deadline</Text>
-          <Pressable onPress={() => onConfirm(new Date(year, month, safeDay))}>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 16 }}>Set Deadline</Text>
+            {isInvalid && (
+              <Text style={{ color: colors.destructive, fontFamily: 'Inter_500Medium', fontSize: 11, marginTop: 2 }}>
+                Cannot select past date
+              </Text>
+            )}
+          </View>
+          <Pressable 
+            onPress={() => {
+              if (!isInvalid) onConfirm(selectedDate);
+            }}
+            style={{ opacity: isInvalid ? 0.5 : 1 }}
+          >
             <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>Done</Text>
           </Pressable>
         </View>

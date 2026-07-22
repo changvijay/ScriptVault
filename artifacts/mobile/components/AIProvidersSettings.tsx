@@ -343,7 +343,7 @@ export function AIProvidersSettings() {
               </View>
 
               {/* Set as active button (only when connected + not already active) */}
-              {isConnected && !isActive && configuredProviders.length > 1 && (
+              {isConnected && !isActive && (
                 <Pressable
                   onPress={e => {
                     e.stopPropagation?.();

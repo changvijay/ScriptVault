@@ -183,7 +183,17 @@ export default function GoalsScreen() {
                   COMPLETED
                 </Text>
               )}
-              <GoalCard goal={item} onPress={() => openEdit(item)} />
+              <GoalCard
+                goal={item}
+                onPress={() => openEdit(item)}
+                onIncrement={() => {
+                  const newProgress = item.currentProgress + 1;
+                  updateGoal(item.id, {
+                    currentProgress: newProgress,
+                    completed: newProgress >= item.targetValue,
+                  });
+                }}
+              />
             </>
           );
         }}

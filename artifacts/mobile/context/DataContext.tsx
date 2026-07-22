@@ -84,6 +84,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       reference: data.reference ?? '',
       status: data.status ?? 'not_started',
       categoryIds: data.categoryIds ?? [],
+      goalId: data.goalId,
       deadline: data.deadline ?? null,
       voiceNotes: data.voiceNotes ?? [],
       videoNotes: data.videoNotes ?? [],

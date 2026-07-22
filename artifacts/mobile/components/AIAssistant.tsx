@@ -11,13 +11,14 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useAI } from '@/context/AIContext';
-import { AIAction, AIProviderKey } from '@/services/ai/types';
+import { AIAction } from '@/services/ai/types';
 import { ACTION_META } from '@/services/ai/prompts';
-import { getAllProviderMeta } from '@/services/ai/providers';
+import { useAI } from '@/context/AIContext';
+
 import * as Haptics from 'expo-haptics';
 
 const ALL_ACTIONS: AIAction[] = [
@@ -29,89 +30,6 @@ interface Props {
   onAccept: (result: string) => void;
 }
 
-// ── Provider / model dropdown ────────────────────────────────────────────────
-function ProviderDropdown() {
-  const colors = useColors();
-  const { configuredProviders, activeProvider, setActiveProvider, settings } = useAI();
-  const allMeta = getAllProviderMeta();
-  const [open, setOpen] = useState(false);
-
-  if (configuredProviders.length === 0) return null;
-
-  const activeMeta = activeProvider ? allMeta.find(m => m.key === activeProvider) : null;
-  const activeCfg = activeProvider ? settings.providers[activeProvider] : null;
-  const activeModelLabel = activeMeta && activeCfg
-    ? activeMeta.models.find(m => m.id === activeCfg.selectedModel)?.label ?? activeCfg.selectedModel
-    : '';
-
-  const handleSelect = (key: AIProviderKey) => {
-    setActiveProvider(key);
-    setOpen(false);
-    Haptics.selectionAsync();
-  };
-
-  return (
-    <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={[styles.dropdownBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.dropdownLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
-            AI Provider
-          </Text>
-          <View style={styles.dropdownValueRow}>
-            {activeMeta && <View style={[styles.providerDot, { backgroundColor: activeMeta.color }]} />}
-            <Text style={[styles.dropdownValue, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-              {activeModelLabel || activeMeta?.displayName || 'Select provider'}
-            </Text>
-          </View>
-        </View>
-        <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
-      </Pressable>
-
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.dropdownOverlay} onPress={() => setOpen(false)}>
-          <View style={[styles.dropdownSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.dropdownSheetTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold', borderBottomColor: colors.border }]}>
-              AI Provider
-            </Text>
-            {configuredProviders.map(key => {
-              const meta = allMeta.find(m => m.key === key)!;
-              const cfg = settings.providers[key];
-              const modelLabel = meta.models.find(m => m.id === cfg?.selectedModel)?.label ?? cfg?.selectedModel;
-              const active = activeProvider === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => handleSelect(key)}
-                  style={[
-                    styles.dropdownOption,
-                    {
-                      backgroundColor: active ? meta.color + '15' : 'transparent',
-                      borderBottomColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View style={[styles.providerDot, { backgroundColor: meta.color }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.dropdownOptionName, { color: colors.foreground, fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
-                      {modelLabel}
-                    </Text>
-                    <Text style={[styles.dropdownOptionSub, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                      {meta.displayName}
-                    </Text>
-                  </View>
-                  {active && <Feather name="check" size={16} color={meta.color} />}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
 
 // ── Result preview modal ─────────────────────────────────────────────────────
 function ResultModal({
@@ -246,13 +164,15 @@ function ResultModal({
 // ── Main component ───────────────────────────────────────────────────────────
 export function AIAssistant({ scriptContent, onAccept }: Props) {
   const colors = useColors();
-  const { hasAI, runAction } = useAI();
+  const { hasAI, runAction, runCustomAction } = useAI();
 
   const [activeAction, setActiveAction] = useState<AIAction | null>(null);
+  const [activeCustomPrompt, setActiveCustomPrompt] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customInput, setCustomInput] = useState('');
 
   const run = async (action: AIAction) => {
     setActiveAction(action);
@@ -271,9 +191,28 @@ export function AIAssistant({ scriptContent, onAccept }: Props) {
     }
   };
 
+  const runCustom = async (prompt: string) => {
+    setActiveAction(null);
+    setActiveCustomPrompt(prompt);
+    setResult('');
+    setError(null);
+    setLoading(true);
+    setModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const text = await runCustomAction(prompt, scriptContent);
+      setResult(text);
+    } catch (e: any) {
+      setError(e?.message ?? 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAccept = () => {
     onAccept(result);
     setModalVisible(false);
+    setCustomInput('');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -284,6 +223,7 @@ export function AIAssistant({ scriptContent, onAccept }: Props) {
 
   const handleRegenerate = () => {
     if (activeAction) run(activeAction);
+    else if (activeCustomPrompt) runCustom(activeCustomPrompt);
   };
 
   // Not configured
@@ -303,11 +243,13 @@ export function AIAssistant({ scriptContent, onAccept }: Props) {
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Provider dropdown */}
-      <ProviderDropdown />
 
-      {/* Action buttons grid */}
-      <View style={styles.actionsGrid}>
+      {/* Action buttons scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.actionsScroll}
+      >
         {ALL_ACTIONS.map(action => {
           const meta = ACTION_META[action];
           return (
@@ -324,22 +266,44 @@ export function AIAssistant({ scriptContent, onAccept }: Props) {
                 },
               ]}
             >
-              <Text style={styles.actionEmoji}>{meta.emoji}</Text>
               <Text
                 style={[styles.actionLabel, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}
                 numberOfLines={1}
               >
-                {meta.label}
+                {meta.emoji} {meta.label}
               </Text>
-              <Text
-                style={[styles.actionDesc, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}
-                numberOfLines={2}
-              >
-                {meta.description}
-              </Text>
+
             </Pressable>
           );
         })}
+      </ScrollView>
+
+      {/* Custom prompt input */}
+      <View style={[styles.customInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TextInput
+          style={[styles.customInput, { color: colors.foreground, fontFamily: 'Inter_400Regular' }]}
+          placeholder="Ask AI to do something else..."
+          placeholderTextColor={colors.mutedForeground}
+          value={customInput}
+          onChangeText={setCustomInput}
+          onSubmitEditing={() => {
+            if (customInput.trim()) {
+              runCustom(customInput.trim());
+            }
+          }}
+          returnKeyType="send"
+        />
+        <Pressable
+          style={[styles.customSendBtn, { backgroundColor: customInput.trim() ? colors.primary : colors.muted }]}
+          disabled={!customInput.trim()}
+          onPress={() => {
+            if (customInput.trim()) {
+              runCustom(customInput.trim());
+            }
+          }}
+        >
+          <Feather name="arrow-up" size={16} color={customInput.trim() ? colors.primaryForeground : colors.mutedForeground} />
+        </Pressable>
       </View>
 
       {/* Result modal */}
@@ -371,63 +335,43 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, marginTop: 4 },
   emptyText: { fontSize: 13, lineHeight: 20, textAlign: 'center' },
 
-  // Provider dropdown
-  dropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 10,
-  },
-  dropdownLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 },
-  dropdownValueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  dropdownValue: { fontSize: 15 },
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  dropdownSheet: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  dropdownSheetTitle: {
-    fontSize: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  dropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  dropdownOptionName: { fontSize: 15 },
-  dropdownOptionSub: { fontSize: 12, marginTop: 2 },
-  providerDot: { width: 8, height: 8, borderRadius: 4 },
 
-  // Actions grid
-  actionsGrid: {
+
+  // Actions scroll
+  actionsScroll: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
   },
   actionBtn: {
-    width: '47%',
-    padding: 14,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderWidth: 1,
   },
   actionEmoji: { fontSize: 22 },
-  actionLabel: { fontSize: 14 },
-  actionDesc: { fontSize: 11, lineHeight: 16 },
+  actionLabel: { fontSize: 12 },
+
+  // Custom prompt input
+  customInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 6,
+    gap: 8,
+  },
+  customInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+  },
+  customSendBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Result modal
   modalRoot: { flex: 1 },

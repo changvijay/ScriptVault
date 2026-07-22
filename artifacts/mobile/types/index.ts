@@ -38,6 +38,7 @@ export interface Script {
   reference: string;
   status: ScriptStatus;
   categoryIds: string[];
+  goalId?: string;
   deadline: string | null; // YYYY-MM-DD
   voiceNotes: VoiceNote[];
   videoNotes: VideoNote[];

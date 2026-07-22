@@ -43,6 +43,7 @@ interface AIContextValue {
   ) => Promise<void>;
   testProvider: (key: AIProviderKey, apiKey: string) => Promise<void>;
   runAction: (action: AIAction, content: string) => Promise<string>;
+  runCustomAction: (prompt: string, content: string) => Promise<string>;
 }
 
 const AIContext = createContext<AIContextValue | null>(null);
@@ -82,6 +83,10 @@ async function loadAllSettings(): Promise<AISettings> {
   if (activeProvider) {
     const active = providers[activeProvider];
     if (!active?.enabled || !active.apiKey.trim()) activeProvider = null;
+  }
+  
+  if (!activeProvider) {
+    activeProvider = ALL_KEYS.find(k => providers[k]?.enabled && providers[k]?.apiKey.trim()) ?? null;
   }
 
   return { providers, activeProvider };
@@ -183,6 +188,26 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     [settings],
   );
 
+  const runCustomAction = useCallback(
+    async (prompt: string, content: string): Promise<string> => {
+      if (!content.trim()) throw new Error('Script content is empty.');
+      if (!prompt.trim()) throw new Error('Custom prompt is empty.');
+      const key = settings.activeProvider;
+      if (!key) throw new Error('No AI provider selected.');
+      const cfg = settings.providers[key];
+      if (!cfg?.apiKey.trim()) throw new Error('API key is not configured.');
+      if (!cfg.enabled) throw new Error('This AI provider is disabled.');
+
+      const provider = getProvider(key);
+      const systemPrompt = `You are a professional AI assistant. Edit the user's script strictly according to the following custom instructions:
+"${prompt}"
+
+Return ONLY the final edited script content without any conversational filler, markdown formatting (unless the user asked for it), or explanations. Do not include introductory text like "Here is the script."`;
+      return provider.generate(cfg.apiKey, cfg.selectedModel, systemPrompt, content);
+    },
+    [settings],
+  );
+
   const configuredProviders: AIProviderKey[] = ALL_KEYS.filter(k => {
     const c = settings.providers[k];
     return c && c.enabled && c.apiKey.trim().length > 0;
@@ -202,6 +227,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         saveProvider,
         testProvider,
         runAction,
+        runCustomAction,
       }}
     >
       {children}

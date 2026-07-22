@@ -31,7 +31,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 export default function ScriptsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { scripts, categories } = useData();
+  const { scripts, categories, updateScript } = useData();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -41,7 +41,12 @@ export default function ScriptsScreen() {
 
   const filtered = useMemo(() => {
     let result = scripts;
-    if (filter !== 'all') result = result.filter(s => s.status === filter);
+    result = result.filter(s => !s.categoryIds.includes("All"));
+    if (filter !== 'all') {
+      result = result.filter(s => s.status === filter);
+    } else {
+      result = result.filter(s => s.status !== 'completed');
+    }
     if (selectedCategory) result = result.filter(s => s.categoryIds.includes(selectedCategory));
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -63,6 +68,7 @@ export default function ScriptsScreen() {
         script={item}
         categories={categories}
         onPress={() => router.push(`/script/${item.id}`)}
+        onStatusChange={(status) => updateScript(item.id, { status })}
       />
     ),
     [categories],

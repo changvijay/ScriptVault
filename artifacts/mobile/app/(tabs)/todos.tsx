@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '@/context/DataContext';
@@ -280,6 +281,16 @@ export default function TodosScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+
+  const { prefillDate } = useLocalSearchParams<{ prefillDate?: string }>();
+
+  useEffect(() => {
+    if (prefillDate) {
+      setEditingTodo({ dueDate: prefillDate } as Partial<TodoItem> as any);
+      setModalVisible(true);
+      router.setParams({ prefillDate: '' });
+    }
+  }, [prefillDate]);
 
   const topInset = Platform.OS === 'web' ? 0 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;

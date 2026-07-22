@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   FlatList,
+  Linking,
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -25,8 +26,11 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { Audio, Video, ResizeMode } from 'expo-av';
+import { File, Directory, Paths } from 'expo-file-system';
+import { getAllProviderMeta } from '@/services/ai/providers';
+import { AIProviderKey } from '@/services/ai/types';
+import { useAI } from '@/context/AIContext';
 
 const STATUS_OPTIONS: { value: ScriptStatus; label: string }[] = [
   { value: 'not_started', label: 'Not Started' },
@@ -34,7 +38,7 @@ const STATUS_OPTIONS: { value: ScriptStatus; label: string }[] = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatDuration(ms: number): string {
   const secs = Math.floor(ms / 1000);
@@ -42,6 +46,83 @@ function formatDuration(ms: number): string {
   const s = secs % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+function ProviderDropdown() {
+  const colors = useColors();
+  const { configuredProviders, activeProvider, setActiveProvider, settings } = useAI();
+  const allMeta = getAllProviderMeta();
+  const [open, setOpen] = useState(false);
+
+  if (configuredProviders.length === 0) return null;
+
+  const activeMeta = activeProvider ? allMeta.find(m => m.key === activeProvider) : null;
+  const activeCfg = activeProvider ? settings.providers[activeProvider] : null;
+  const activeModelLabel = activeMeta && activeCfg
+    ? activeMeta.models.find(m => m.id === activeCfg.selectedModel)?.label ?? activeCfg.selectedModel
+    : '';
+
+  const handleSelect = (key: AIProviderKey) => {
+    setActiveProvider(key);
+    setOpen(false);
+    Haptics.selectionAsync();
+  };
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={[styles.dropdownBtnCompact, { backgroundColor: colors.muted, borderColor: colors.border }]}
+      >
+        {activeMeta && <View style={[styles.providerDot, { backgroundColor: activeMeta.color }]} />}
+        <Text style={[styles.dropdownValueCompact, { color: colors.foreground, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
+          {activeModelLabel || activeMeta?.displayName || 'Select provider'}
+        </Text>
+        <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.dropdownOverlay} onPress={() => setOpen(false)}>
+          <View style={[styles.dropdownSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.dropdownSheetTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold', borderBottomColor: colors.border }]}>
+              AI Provider
+            </Text>
+            {configuredProviders.map(key => {
+              const meta = allMeta.find(m => m.key === key)!;
+              const cfg = settings.providers[key];
+              const modelLabel = meta.models.find(m => m.id === cfg?.selectedModel)?.label ?? cfg?.selectedModel;
+              const active = activeProvider === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => handleSelect(key)}
+                  style={[
+                    styles.dropdownOption,
+                    {
+                      backgroundColor: active ? meta.color + '15' : 'transparent',
+                      borderBottomColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View style={[styles.providerDot, { backgroundColor: meta.color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.dropdownOptionName, { color: colors.foreground, fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+                      {modelLabel}
+                    </Text>
+                    <Text style={[styles.dropdownOptionSub, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                      {meta.displayName}
+                    </Text>
+                  </View>
+                  {active && <Feather name="check" size={16} color={meta.color} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 
 function formatDeadline(iso: string): string {
   const d = new Date(iso);
@@ -121,10 +202,10 @@ function AddFileModal({
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function ScriptEditorScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, prefillDate } = useLocalSearchParams<{ id: string; prefillDate?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { scripts, categories, createScript, updateScript, deleteScript } = useData();
+  const { scripts, categories, goals, createScript, updateScript, deleteScript, updateGoal } = useData();
 
   const isNew = id === 'new';
   const existing = isNew ? null : scripts.find(s => s.id === id) ?? null;
@@ -135,8 +216,11 @@ export default function ScriptEditorScreen() {
   const [reference, setReference] = useState(existing?.reference ?? '');
   const [status, setStatus] = useState<ScriptStatus>(existing?.status ?? 'not_started');
   const [selectedCats, setSelectedCats] = useState<string[]>(existing?.categoryIds ?? []);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(existing?.goalId ?? null);
   const [deadline, setDeadline] = useState<Date | null>(
-    existing?.deadline ? new Date(existing.deadline) : null,
+    existing?.deadline 
+      ? new Date(existing.deadline) 
+      : prefillDate ? new Date(prefillDate) : null,
   );
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>(existing?.voiceNotes ?? []);
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>(existing?.videoNotes ?? []);
@@ -146,7 +230,9 @@ export default function ScriptEditorScreen() {
   const [saving, setSaving] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [catPickerVisible, setCatPickerVisible] = useState(false);
+  const [goalPickerVisible, setGoalPickerVisible] = useState(false);
   const [addFileVisible, setAddFileVisible] = useState(false);
+  const [previewFile, setPreviewFile] = useState<AttachedFile | null>(null);
 
   // Audio recording
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -165,6 +251,14 @@ export default function ScriptEditorScreen() {
     return () => { soundRef.current?.unloadAsync(); };
   }, []);
 
+  const getDaysLeft = (d: Date) => {
+    const diff = Math.ceil((d.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return 'Overdue';
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    return `In ${diff} days`;
+  };
+
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!title.trim()) {
@@ -180,11 +274,37 @@ export default function ScriptEditorScreen() {
         reference,
         status,
         categoryIds: selectedCats,
+        goalId: selectedGoalId || undefined,
         deadline: deadlineStr,
         voiceNotes,
         videoNotes,
         attachedFiles,
       };
+
+      const oldGoalId = existing?.goalId;
+      if (oldGoalId !== selectedGoalId) {
+        if (oldGoalId) {
+          const oldGoal = goals.find(g => g.id === oldGoalId);
+          if (oldGoal) {
+            const newProgress = Math.max(0, oldGoal.currentProgress - 1);
+            await updateGoal(oldGoalId, { 
+              currentProgress: newProgress,
+              completed: newProgress >= oldGoal.targetValue 
+            });
+          }
+        }
+        if (selectedGoalId) {
+          const newGoal = goals.find(g => g.id === selectedGoalId);
+          if (newGoal) {
+            const newProgress = newGoal.currentProgress + 1;
+            await updateGoal(selectedGoalId, {
+              currentProgress: newProgress,
+              completed: newProgress >= newGoal.targetValue
+            });
+          }
+        }
+      }
+
       if (isNew) await createScript(data);
       else if (existing) await updateScript(existing.id, data);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -241,10 +361,13 @@ export default function ScriptEditorScreen() {
       const uri = recording.getURI();
       const recStatus = await recording.getStatusAsync();
       if (uri) {
-        const dir = FileSystem.documentDirectory + 'voice_notes/';
-        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-        const dest = dir + `voice_${Date.now()}.m4a`;
-        await FileSystem.copyAsync({ from: uri, to: dest });
+        const dir = new Directory(Paths.document, 'voice_notes');
+        if (!dir.exists) {
+          await dir.create();
+        }
+        const destFile = new File(dir, `voice_${Date.now()}.m4a`);
+        const dest = destFile.uri;
+        await new File(uri).copy(destFile);
         setVoiceNotes(prev => [...prev, {
           id: generateId(), uri: dest,
           duration: recStatus.isLoaded ? recStatus.durationMillis ?? 0 : 0,
@@ -312,13 +435,16 @@ export default function ScriptEditorScreen() {
           quality: 0.85,
         });
         if (!result.canceled) {
-          const dir = FileSystem.documentDirectory + 'attachments/';
-          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const dir = new Directory(Paths.document, 'attachments');
+          if (!dir.exists) {
+            await dir.create();
+          }
           const newFiles: AttachedFile[] = [];
           for (const asset of result.assets) {
             const ext = asset.uri.split('.').pop() ?? 'jpg';
-            const dest = dir + `img_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
-            await FileSystem.copyAsync({ from: asset.uri, to: dest });
+            const destFile = new File(dir, `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`);
+            const dest = destFile.uri;
+            await new File(asset.uri).copy(destFile);
             newFiles.push({
               id: generateId(),
               uri: dest,
@@ -341,13 +467,16 @@ export default function ScriptEditorScreen() {
           quality: 1,
         });
         if (!result.canceled) {
-          const dir = FileSystem.documentDirectory + 'attachments/';
-          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const dir = new Directory(Paths.document, 'attachments');
+          if (!dir.exists) {
+            await dir.create();
+          }
           const newFiles: AttachedFile[] = [];
           for (const asset of result.assets) {
             const ext = asset.uri.split('.').pop() ?? 'mp4';
-            const dest = dir + `vid_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
-            await FileSystem.copyAsync({ from: asset.uri, to: dest });
+            const destFile = new File(dir, `vid_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`);
+            const dest = destFile.uri;
+            await new File(asset.uri).copy(destFile);
             newFiles.push({
               id: generateId(),
               uri: dest,
@@ -369,13 +498,16 @@ export default function ScriptEditorScreen() {
           copyToCacheDirectory: true,
         });
         if (!result.canceled) {
-          const dir = FileSystem.documentDirectory + 'attachments/';
-          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const dir = new Directory(Paths.document, 'attachments');
+          if (!dir.exists) {
+            await dir.create();
+          }
           const newFiles: AttachedFile[] = [];
           for (const asset of result.assets) {
             const ext = asset.name.split('.').pop() ?? 'mp3';
-            const dest = dir + `aud_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
-            await FileSystem.copyAsync({ from: asset.uri, to: dest });
+            const destFile = new File(dir, `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`);
+            const dest = destFile.uri;
+            await new File(asset.uri).copy(destFile);
             newFiles.push({
               id: generateId(),
               uri: dest,
@@ -489,9 +621,12 @@ export default function ScriptEditorScreen() {
 
         {/* AI Assistant */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
-            AI Assistant
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
+              AI Assistant
+            </Text>
+            <ProviderDropdown />
+          </View>
           <AIAssistant
             scriptContent={notes}
             onAccept={result => {
@@ -503,7 +638,24 @@ export default function ScriptEditorScreen() {
 
         {/* Reference */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Reference</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Reference</Text>
+            {!!reference.trim() && (
+              <Pressable
+                onPress={() => {
+                  let url = reference.trim();
+                  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    url = 'https://' + url;
+                  }
+                  Linking.openURL(url).catch(() => {});
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 }}
+              >
+                <Feather name="external-link" size={14} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_500Medium', fontSize: 13 }}>Open Link</Text>
+              </Pressable>
+            )}
+          </View>
           <TextInput
             style={[styles.textInput, { color: colors.foreground, fontFamily: 'Inter_400Regular', backgroundColor: colors.muted, borderRadius: colors.radius }]}
             value={reference}
@@ -513,45 +665,102 @@ export default function ScriptEditorScreen() {
           />
         </View>
 
-        {/* Categories */}
-        <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <View style={styles.rowBetween}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Categories</Text>
-            <Pressable onPress={() => setCatPickerVisible(!catPickerVisible)}>
-              <Feather name={catPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
-            </Pressable>
+        {/* Categories & Linked Goal */}
+        <View style={[styles.section, { borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'flex-start', gap: 20 }]}>
+          
+          {/* Categories */}
+          <View style={{ flex: 1, gap: 10 }}>
+            <View style={styles.rowBetween}>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Categories</Text>
+              <Pressable onPress={() => setCatPickerVisible(!catPickerVisible)}>
+                <Feather name={catPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            {selectedCats.length > 0 && (
+              <View style={styles.catBadges}>
+                {categories.filter(c => selectedCats.includes(c.id)).map(cat => (
+                  <CategoryBadge key={cat.id} name={cat.name} color={cat.color} />
+                ))}
+              </View>
+            )}
+            {catPickerVisible && (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {categories.length === 0 ? (
+                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>
+                    No categories yet
+                  </Text>
+                ) : (
+                  categories.map(cat => {
+                    const selected = selectedCats.includes(cat.id);
+                    return (
+                      <Pressable
+                        key={cat.id}
+                        onPress={() => toggleCategory(cat.id)}
+                        style={[styles.catOption, { backgroundColor: selected ? cat.color + '15' : colors.muted, borderColor: selected ? cat.color : colors.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 6 }]}
+                      >
+                        <View style={[styles.catDot, { backgroundColor: cat.color }]} />
+                        <Text style={[styles.catOptionText, { color: colors.foreground, fontFamily: 'Inter_400Regular', fontSize: 13 }]} numberOfLines={1}>{cat.name}</Text>
+                        {selected && <Feather name="check" size={14} color={cat.color} />}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            )}
           </View>
-          {selectedCats.length > 0 && (
-            <View style={styles.catBadges}>
-              {categories.filter(c => selectedCats.includes(c.id)).map(cat => (
-                <CategoryBadge key={cat.id} name={cat.name} color={cat.color} />
-              ))}
+
+          {/* Linked Goal */}
+          <View style={{ flex: 1, gap: 10 }}>
+            <View style={styles.rowBetween}>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Linked Goal</Text>
+              <Pressable onPress={() => setGoalPickerVisible(!goalPickerVisible)}>
+                <Feather name={goalPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+              </Pressable>
             </View>
-          )}
-          {catPickerVisible && (
-            <View style={{ gap: 8, marginTop: 4 }}>
-              {categories.length === 0 ? (
-                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 14 }}>
-                  No categories yet — add them in Settings
-                </Text>
-              ) : (
-                categories.map(cat => {
-                  const selected = selectedCats.includes(cat.id);
-                  return (
-                    <Pressable
-                      key={cat.id}
-                      onPress={() => toggleCategory(cat.id)}
-                      style={[styles.catOption, { backgroundColor: selected ? cat.color + '15' : colors.muted, borderColor: selected ? cat.color : colors.border, borderRadius: 10 }]}
-                    >
-                      <View style={[styles.catDot, { backgroundColor: cat.color }]} />
-                      <Text style={[styles.catOptionText, { color: colors.foreground, fontFamily: 'Inter_400Regular' }]}>{cat.name}</Text>
-                      {selected && <Feather name="check" size={16} color={cat.color} />}
+            {selectedGoalId && (
+              <View>
+                {goals.filter(g => g.id === selectedGoalId).map(goal => (
+                  <View key={goal.id} style={[styles.catOption, { backgroundColor: colors.primary + '15', borderColor: colors.primary, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 6 }]}>
+                    <Feather name="target" size={12} color={colors.primary} />
+                    <Text style={[styles.catOptionText, { color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 13 }]} numberOfLines={1}>{goal.title}</Text>
+                    <Pressable onPress={() => setSelectedGoalId(null)}>
+                      <Feather name="x-circle" size={16} color={colors.mutedForeground} />
                     </Pressable>
-                  );
-                })
-              )}
-            </View>
-          )}
+                  </View>
+                ))}
+              </View>
+            )}
+            {goalPickerVisible && (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {goals.length === 0 ? (
+                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>
+                    No goals available
+                  </Text>
+                ) : (
+                  goals.map(goal => {
+                    const selected = selectedGoalId === goal.id;
+                    return (
+                      <Pressable
+                        key={goal.id}
+                        onPress={() => {
+                          setSelectedGoalId(goal.id);
+                          setGoalPickerVisible(false);
+                        }}
+                        style={[styles.catOption, { backgroundColor: selected ? colors.primary + '15' : colors.muted, borderColor: selected ? colors.primary : colors.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 6 }]}
+                      >
+                        <Feather name="target" size={12} color={selected ? colors.primary : colors.mutedForeground} />
+                        <Text style={[styles.catOptionText, { color: colors.foreground, fontFamily: 'Inter_400Regular', fontSize: 13 }]} numberOfLines={1}>
+                          {goal.title}
+                        </Text>
+                        {selected && <Feather name="check" size={14} color={colors.primary} />}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            )}
+          </View>
+
         </View>
 
         {/* Deadline */}
@@ -560,16 +769,33 @@ export default function ScriptEditorScreen() {
           <View style={styles.rowBetween}>
             <Pressable
               onPress={() => setDatePickerVisible(true)}
-              style={[styles.dateBtn, { backgroundColor: colors.muted, borderRadius: 10, flex: 1 }]}
+              style={[
+                styles.dateBtn, 
+                { 
+                  backgroundColor: deadline ? colors.primary + '15' : colors.muted,
+                  borderColor: deadline ? colors.primary : 'transparent',
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  flex: 1,
+                  height: 52
+                }
+              ]}
             >
-              <Feather name="calendar" size={15} color={deadline ? colors.primary : colors.mutedForeground} />
-              <Text style={{ color: deadline ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 15 }}>
-                {deadline ? formatDeadline(deadline.toISOString()) : 'No deadline set'}
-              </Text>
+              <Feather name="calendar" size={16} color={deadline ? colors.primary : colors.mutedForeground} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: deadline ? colors.primary : colors.mutedForeground, fontFamily: 'Inter_500Medium', fontSize: 15 }}>
+                  {deadline ? formatDeadline(deadline.toISOString()) : 'Set a deadline'}
+                </Text>
+                {deadline && (
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 }}>
+                    {getDaysLeft(deadline)}
+                  </Text>
+                )}
+              </View>
             </Pressable>
             {deadline && (
-              <Pressable onPress={() => setDeadline(null)} style={[styles.clearBtn, { backgroundColor: colors.muted }]}>
-                <Feather name="x" size={16} color={colors.mutedForeground} />
+              <Pressable onPress={() => setDeadline(null)} style={[styles.clearBtn, { backgroundColor: colors.primary + '15' }]}>
+                <Feather name="x" size={16} color={colors.primary} />
               </Pressable>
             )}
           </View>
@@ -597,18 +823,20 @@ export default function ScriptEditorScreen() {
               <View style={styles.imageGrid}>
                 {imageFiles.map(file => (
                   <View key={file.id} style={[styles.imageTile, { borderRadius: 10, overflow: 'hidden', borderColor: colors.border }]}>
-                    <Image source={{ uri: file.uri }} style={styles.imageTileImg} resizeMode="cover" />
+                    <Pressable style={{ flex: 1 }} onPress={() => setPreviewFile(file)}>
+                      <Image source={{ uri: file.uri }} style={styles.imageTileImg} resizeMode="cover" />
+                      {file.name ? (
+                        <View style={styles.imageTileFooter}>
+                          <Text style={styles.imageTileName} numberOfLines={1}>{file.name}</Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
                     <Pressable
                       onPress={() => deleteAttachedFile(file.id)}
                       style={[styles.imageTileDelete, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
                     >
                       <Feather name="x" size={13} color="#fff" />
                     </Pressable>
-                    {file.name ? (
-                      <View style={styles.imageTileFooter}>
-                        <Text style={styles.imageTileName} numberOfLines={1}>{file.name}</Text>
-                      </View>
-                    ) : null}
                   </View>
                 ))}
               </View>
@@ -622,7 +850,7 @@ export default function ScriptEditorScreen() {
                 <Feather name="film" size={11} /> Videos
               </Text>
               {videoFiles.map(file => (
-                <View key={file.id} style={[styles.fileRow, { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: 10 }]}>
+                <Pressable key={file.id} onPress={() => setPreviewFile(file)} style={[styles.fileRow, { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: 10 }]}>
                   <View style={[styles.fileIconBox, { backgroundColor: colors.primary + '18' }]}>
                     <Feather name="film" size={20} color={colors.primary} />
                   </View>
@@ -635,7 +863,7 @@ export default function ScriptEditorScreen() {
                   <Pressable onPress={() => deleteAttachedFile(file.id)}>
                     <Feather name="trash-2" size={17} color={colors.destructive} />
                   </Pressable>
-                </View>
+                </Pressable>
               ))}
             </View>
           )}
@@ -757,6 +985,7 @@ export default function ScriptEditorScreen() {
       <DatePickerModal
         visible={datePickerVisible}
         date={deadline}
+        minDate={new Date()}
         onConfirm={d => { setDeadline(d); setDatePickerVisible(false); }}
         onClose={() => setDatePickerVisible(false)}
       />
@@ -767,11 +996,91 @@ export default function ScriptEditorScreen() {
         onClose={() => setAddFileVisible(false)}
         onPick={handlePickFile}
       />
+
+      {/* File Preview Modal */}
+      <Modal
+        visible={!!previewFile}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setPreviewFile(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable
+            style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }}
+            onPress={() => setPreviewFile(null)}
+          >
+            <Feather name="x" size={28} color="#fff" />
+          </Pressable>
+          {previewFile?.type === 'image' && (
+            <Image
+              source={{ uri: previewFile.uri }}
+              style={{ width: '100%', height: '80%' }}
+              resizeMode="contain"
+            />
+          )}
+          {previewFile?.type === 'video' && (
+            <Video
+              source={{ uri: previewFile.uri }}
+              style={{ width: '100%', height: '80%' }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping
+              shouldPlay
+            />
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+
+  dropdownBtnCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+  },
+  dropdownValueCompact: {
+    fontSize: 12,
+    maxWidth: 120
+  },
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  dropdownSheet: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  dropdownSheetTitle: {
+    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dropdownOptionName: { fontSize: 15 },
+  dropdownOptionSub: { fontSize: 12, marginTop: 2 },
+  providerDot: { width: 8, height: 8, borderRadius: 4 },
+
+
+
+
   section: {
     paddingHorizontal: 20,
     paddingVertical: 16,
