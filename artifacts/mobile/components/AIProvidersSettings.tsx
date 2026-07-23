@@ -101,10 +101,11 @@ function ProviderConfigModal({
     try {
       await saveProvider(providerKey, apiKey, enabled, selectedModel);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onClose();
+      Alert.alert('Success', 'Successfully connected and saved.', [
+        { text: 'OK', onPress: onClose }
+      ]);
     } catch {
       Alert.alert('Error', 'Could not save provider settings.');
-    } finally {
       setSaving(false);
     }
   };

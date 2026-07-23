@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a9240eca-7326-4a5d-8d22-db9f54ac4a5b"
+      }
+    },
+    "android": {
+      "package": "com.changitsolutions.scripttracker"
+    }
+  }
+}
