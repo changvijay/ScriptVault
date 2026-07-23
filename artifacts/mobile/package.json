@@ -2,8 +2,10 @@
   "name": "@workspace/mobile",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "pnpm@9.5.0",
   "main": "expo-router/entry",
   "scripts": {
+    "eas-build-pre-install": "npm install -g pnpm@9.5.0",
     "dev": "cross-env PORT=8081 expo start --port 8081",
     "dev:tunnel": "cross-env PORT=8081 expo start --tunnel --port 8081",
     "build": "node scripts/build.js",
