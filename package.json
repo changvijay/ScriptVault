@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "eas-build-pre-install": "npm install -g pnpm@9.5.0 && pnpm install --no-frozen-lockfile",
+    "eas-build-pre-install": "corepack enable && corepack prepare pnpm@9.5.0 --activate",
     "preinstall": "echo Using pnpm",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:android": "cd artifacts/mobile && npx eas-cli@latest build --platform android --profile preview",

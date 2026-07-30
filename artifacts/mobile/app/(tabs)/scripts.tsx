@@ -8,6 +8,8 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
+import Animated, { FadeInUp } from "react-native-reanimated";
+import { DailyAIIdeaCard } from "@/components/DailyAIIdeaCard";
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '@/context/DataContext';
@@ -74,23 +76,34 @@ export default function ScriptsScreen() {
     [categories],
   );
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.topBar, { paddingTop: topInset + 12 }]}>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
-          Scripts
-        </Text>
-        <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-          {scripts.length} total
-        </Text>
-      </View>
+  const listHeader = (
+    <View style={{ gap: 16, paddingBottom: 8, paddingTop: 4 }}>
+      {/* ── Daily AI Content Idea (if Niches are configured) ── */}
+      <Animated.View
+        entering={FadeInUp.delay(150).springify()}
+        style={{ marginHorizontal: 16 }}
+      >
+        <DailyAIIdeaCard />
+      </Animated.View>
 
       {/* Search */}
-      <View style={[styles.searchWrap, { backgroundColor: colors.muted, borderRadius: colors.radius, borderColor: colors.border, marginHorizontal: 16 }]}>
+      <View
+        style={[
+          styles.searchWrap,
+          {
+            backgroundColor: colors.muted,
+            borderRadius: colors.radius,
+            borderColor: colors.border,
+            marginHorizontal: 16,
+          },
+        ]}
+      >
         <Feather name="search" size={16} color={colors.mutedForeground} />
         <TextInput
-          style={[styles.searchInput, { color: colors.foreground, fontFamily: 'Inter_400Regular' }]}
+          style={[
+            styles.searchInput,
+            { color: colors.foreground, fontFamily: 'Inter_400Regular' },
+          ]}
           placeholder="Search title, notes, reference…"
           placeholderTextColor={colors.mutedForeground}
           value={search}
@@ -135,7 +148,9 @@ export default function ScriptsScreen() {
                 label={item.name}
                 active={selectedCategory === item.id}
                 onPress={() =>
-                  setSelectedCategory(selectedCategory === item.id ? null : item.id)
+                  setSelectedCategory(
+                    selectedCategory === item.id ? null : item.id,
+                  )
                 }
                 color={item.color}
               />
@@ -143,12 +158,42 @@ export default function ScriptsScreen() {
           />
         </View>
       )}
+    </View>
+  );
+
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.topBar, { paddingTop: topInset + 12 }]}>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.foreground, fontFamily: 'Inter_700Bold' },
+          ]}
+        >
+          Scripts
+        </Text>
+        <Text
+          style={[
+            styles.count,
+            {
+              color: colors.mutedForeground,
+              fontFamily: 'Inter_400Regular',
+            },
+          ]}
+        >
+          {scripts.length} total
+        </Text>
+      </View>
 
       {/* List */}
+
       <FlatList
         data={filtered}
         keyExtractor={s => s.id}
         renderItem={renderItem}
+        ListHeaderComponent={listHeader}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: bottomInset + 172 },

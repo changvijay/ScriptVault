@@ -17,6 +17,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Category } from '@/types';
 import { AIProvidersSettings } from '@/components/AIProvidersSettings';
+import { ContentNichesSettings } from '@/components/ContentNichesSettings';
 
 const PALETTE = [
   '#EF4444', '#F97316', '#F59E0B', '#84CC16',
@@ -177,6 +178,9 @@ export default function SettingsScreen() {
 
         {/* AI Providers */}
         <AIProvidersSettings />
+
+        {/* Content Niches */}
+        <ContentNichesSettings />
 
         {/* About */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16 }]}>

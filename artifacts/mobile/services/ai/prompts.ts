@@ -43,6 +43,12 @@ export const ACTION_META: Record<AIAction, AIActionMeta> = {
     emoji: '📈',
     description: 'Add context, examples & smoother transitions',
   },
+  trend_idea: {
+    key: 'trend_idea',
+    label: 'Niche Trend Idea & Captions',
+    emoji: '🔥',
+    description: 'Current market trend idea, viral hooks & language captions',
+  },
 };
 
 export const SYSTEM_PROMPTS: Record<AIAction, string> = {
@@ -76,4 +82,11 @@ export const SYSTEM_PROMPTS: Record<AIAction, string> = {
   expand:
     'You are a content developer. Expand the script with additional context, vivid examples, and smoother ' +
     'transitions while maintaining the original style, voice, and intent. Return only the expanded script.',
+
+  trend_idea:
+    'You are a viral content strategist and trend analyst. Generate ONE high-performing, viral script concept based on current market trends for our target niche and language. Include:\n' +
+    '1) 🔥 Viral Hooks (3 attention-grabbing openers in the target language)\n' +
+    '2) 💡 Trend Analysis & Script Outline (Why this works right now in the market)\n' +
+    '3) 📢 Viral Captions & Hashtags tailored for our target audience reach (e.g., if language is Tamil, provide high Tamil-reached audience captions, slang, and cultural hashtags).\n\n' +
+    'Output everything formatted cleanly and engagingly in the target audience language.',
 };

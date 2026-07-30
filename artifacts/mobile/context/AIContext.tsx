@@ -15,6 +15,7 @@ import {
   loadSettings,
   saveSettings,
   migrateLegacyStorage,
+  getActiveNicheContext,
 } from '@/services/ai/storage';
 
 const LEGACY_STORAGE_KEY = '@scriptvault:ai';
@@ -183,7 +184,9 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       if (!cfg.enabled) throw new Error('This AI provider is disabled.');
 
       const provider = getProvider(key);
-      return provider.generate(cfg.apiKey, cfg.selectedModel, SYSTEM_PROMPTS[action], content);
+      const nicheCtx = await getActiveNicheContext();
+      const systemPrompt = `${SYSTEM_PROMPTS[action]}\n${nicheCtx}`;
+      return provider.generate(cfg.apiKey, cfg.selectedModel, systemPrompt, content);
     },
     [settings],
   );
@@ -199,10 +202,13 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       if (!cfg.enabled) throw new Error('This AI provider is disabled.');
 
       const provider = getProvider(key);
-      const systemPrompt = `You are a professional AI assistant. Edit the user's script strictly according to the following custom instructions:
+      const nicheCtx = await getActiveNicheContext();
+      const systemPrompt = `You are a professional AI assistant. Edit or answer the user's script/question strictly according to the following custom instructions:
 "${prompt}"
 
-Return ONLY the final edited script content without any conversational filler, markdown formatting (unless the user asked for it), or explanations. Do not include introductory text like "Here is the script."`;
+${nicheCtx}
+
+Return ONLY the final output or edited script content without any conversational filler, markdown formatting (unless appropriate for structured captions/ideas), or explanations. Do not include introductory text like "Here is the script."`;
       return provider.generate(cfg.apiKey, cfg.selectedModel, systemPrompt, content);
     },
     [settings],

@@ -7,7 +7,8 @@ export type AIAction =
   | 'cta'
   | 'tone'
   | 'shorten'
-  | 'expand';
+  | 'expand'
+  | 'trend_idea';
 
 export interface AIActionMeta {
   key: AIAction;
@@ -57,3 +58,41 @@ export interface AIProvider {
     userContent: string,
   ): Promise<string>;
 }
+
+// ── Custom prompts & action ordering preferences ─────────────────────────────
+
+export interface SavedCustomPrompt {
+  id: string; // e.g. 'custom_172234000'
+  label: string; // e.g. 'Translate'
+  emoji: string; // e.g. '🌐'
+  prompt: string; // e.g. 'Translate to Spanish'
+}
+
+export interface AIActionsPreferences {
+  order: string[]; // array of action keys or custom prompt IDs
+  hidden: string[]; // array of hidden action keys/IDs
+  customPrompts: SavedCustomPrompt[];
+}
+
+export interface ContentNiche {
+  id: string;
+  niche: string;
+  title: string;
+  description: string;
+  language: string; // e.g. 'Tamil', 'English', 'Hindi', etc.
+  captions: string[];
+}
+
+export interface DailyIdea {
+  date: string; // YYYY-MM-DD
+  niche: string;
+  language?: string;
+  title: string;
+  description: string;
+  captions?: string[]; // viral captions/hashtags for target audience
+  accepted: boolean;
+  scriptId?: string;
+}
+
+
+
