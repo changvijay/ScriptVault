@@ -11,6 +11,10 @@ interface Props {
   categories: Category[];
   onPress: () => void;
   onStatusChange?: (status: ScriptStatus) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
+  onLongPress?: () => void;
 }
 
 const STATUS_LABELS: Record<ScriptStatus, string> = {
@@ -19,7 +23,7 @@ const STATUS_LABELS: Record<ScriptStatus, string> = {
   completed: 'Completed',
 };
 
-export function ScriptCard({ script, categories, onPress, onStatusChange }: Props) {
+export function ScriptCard({ script, categories, onPress, onStatusChange, selectionMode, selected, onSelect, onLongPress }: Props) {
   const colors = useColors();
   const [statusModalOpen, setStatusModalOpen] = useState(false);
 
@@ -42,19 +46,35 @@ export function ScriptCard({ script, categories, onPress, onStatusChange }: Prop
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const handlePress = () => {
+    if (selectionMode && onSelect) {
+      Haptics.selectionAsync();
+      onSelect();
+    } else {
+      Haptics.selectionAsync();
+      onPress();
+    }
+  };
+
+  const handleLongPress = () => {
+    if (onLongPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onLongPress();
+    }
+  };
+
   return (
     <Pressable
-      onPress={() => {
-        Haptics.selectionAsync();
-        onPress();
-      }}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={400}
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: colors.card,
+          backgroundColor: selected ? colors.primary + '12' : colors.card,
           borderRadius: 20,
-          borderColor: colors.border,
-          borderWidth: 1,
+          borderColor: selected ? colors.primary + '60' : colors.border,
+          borderWidth: selected ? 2 : 1,
           opacity: pressed ? 0.95 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
           ...Platform.select({
@@ -72,6 +92,17 @@ export function ScriptCard({ script, categories, onPress, onStatusChange }: Prop
       <View style={styles.content}>
         {/* Top row */}
         <View style={styles.topRow}>
+          {selectionMode && (
+            <View style={[
+              styles.checkbox,
+              {
+                backgroundColor: selected ? colors.primary : 'transparent',
+                borderColor: selected ? colors.primary : colors.mutedForeground,
+              },
+            ]}>
+              {selected && <Feather name="check" size={13} color="#fff" />}
+            </View>
+          )}
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
             <Text
@@ -338,4 +369,13 @@ const styles = StyleSheet.create({
   dropdownOptionName: { 
     fontSize: 15 
   },
-});;
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 2,
+  },
+});

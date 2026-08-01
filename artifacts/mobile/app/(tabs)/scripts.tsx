@@ -7,8 +7,9 @@ import {
   FlatList,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
-import Animated, { FadeInUp } from "react-native-reanimated";
+import Animated, { FadeInUp, FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { DailyAIIdeaCard } from "@/components/DailyAIIdeaCard";
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,10 +34,14 @@ const FILTERS: { key: Filter; label: string }[] = [
 export default function ScriptsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { scripts, categories, updateScript } = useData();
+  const { scripts, categories, updateScript, deleteScripts } = useData();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // ── Multi-select state ──
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -64,6 +69,63 @@ export default function ScriptsScreen() {
     );
   }, [scripts, filter, search, selectedCategory]);
 
+  // ── Selection helpers ──
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      // Auto-exit selection mode if nothing is selected
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const enterSelectionMode = useCallback((id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const cancelSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(filtered.map(s => s.id)));
+  }, [filtered]);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+
+    Alert.alert(
+      'Delete Scripts',
+      `Are you sure you want to delete ${count} script${count > 1 ? 's' : ''}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteScripts(Array.from(selectedIds));
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              cancelSelection();
+            } catch (e: any) {
+              Alert.alert('Error', e.message ?? 'Failed to delete scripts.');
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedIds, deleteScripts, cancelSelection]);
+
   const renderItem = useCallback(
     ({ item }: { item: typeof scripts[0] }) => (
       <ScriptCard
@@ -71,9 +133,19 @@ export default function ScriptsScreen() {
         categories={categories}
         onPress={() => router.push(`/script/${item.id}`)}
         onStatusChange={(status) => updateScript(item.id, { status })}
+        selectionMode={selectionMode}
+        selected={selectedIds.has(item.id)}
+        onSelect={() => toggleSelect(item.id)}
+        onLongPress={() => {
+          if (!selectionMode) {
+            enterSelectionMode(item.id);
+          } else {
+            toggleSelect(item.id);
+          }
+        }}
       />
     ),
-    [categories],
+    [categories, selectionMode, selectedIds, toggleSelect, enterSelectionMode],
   );
 
   const listHeader = (
@@ -164,28 +236,79 @@ export default function ScriptsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.topBar, { paddingTop: topInset + 12 }]}>
-        <Text
+      {/* Header — normal or selection mode */}
+      {selectionMode ? (
+        <Animated.View
+          entering={FadeInDown.duration(250)}
           style={[
-            styles.title,
-            { color: colors.foreground, fontFamily: 'Inter_700Bold' },
-          ]}
-        >
-          Scripts
-        </Text>
-        <Text
-          style={[
-            styles.count,
+            styles.selectionBar,
             {
-              color: colors.mutedForeground,
-              fontFamily: 'Inter_400Regular',
+              paddingTop: topInset + 12,
+              backgroundColor: colors.card,
+              borderBottomColor: colors.border,
             },
           ]}
         >
-          {scripts.length} total
-        </Text>
-      </View>
+          <Pressable onPress={cancelSelection} hitSlop={12} style={styles.selBarBtn}>
+            <Feather name="x" size={22} color={colors.foreground} />
+          </Pressable>
+
+          <Text
+            style={[
+              styles.selBarCount,
+              { color: colors.foreground, fontFamily: 'Inter_600SemiBold' },
+            ]}
+          >
+            {selectedIds.size} selected
+          </Text>
+
+          <View style={styles.selBarActions}>
+            <Pressable
+              onPress={selectAll}
+              hitSlop={8}
+              style={[styles.selBarActionBtn, { backgroundColor: colors.muted }]}
+            >
+              <Feather name="check-square" size={16} color={colors.primary} />
+              <Text style={[styles.selBarActionText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                All
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleBulkDelete}
+              hitSlop={8}
+              style={[styles.selBarActionBtn, { backgroundColor: colors.destructive + '15' }]}
+            >
+              <Feather name="trash-2" size={16} color={colors.destructive} />
+              <Text style={[styles.selBarActionText, { color: colors.destructive, fontFamily: 'Inter_500Medium' }]}>
+                Delete
+              </Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : (
+        <View style={[styles.topBar, { paddingTop: topInset + 12 }]}>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.foreground, fontFamily: 'Inter_700Bold' },
+            ]}
+          >
+            Scripts
+          </Text>
+          <Text
+            style={[
+              styles.count,
+              {
+                color: colors.mutedForeground,
+                fontFamily: 'Inter_400Regular',
+              },
+            ]}
+          >
+            {scripts.length} total
+          </Text>
+        </View>
+      )}
 
       {/* List */}
 
@@ -193,6 +316,7 @@ export default function ScriptsScreen() {
         data={filtered}
         keyExtractor={s => s.id}
         renderItem={renderItem}
+        extraData={selectedIds}
         ListHeaderComponent={listHeader}
         contentContainerStyle={[
           styles.listContent,
@@ -208,25 +332,27 @@ export default function ScriptsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* FAB */}
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/script/new');
-        }}
-        style={({ pressed }) => [
-          styles.fab,
-          {
-            backgroundColor: colors.primary,
-            bottom: bottomInset + 100,
-            opacity: pressed ? 0.85 : 1,
-            transform: [{ scale: pressed ? 0.95 : 1 }],
-            borderRadius: 32,
-          },
-        ]}
-      >
-        <Feather name="plus" size={26} color={colors.primaryForeground} />
-      </Pressable>
+      {/* FAB — hidden in selection mode */}
+      {!selectionMode && (
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push('/script/new');
+          }}
+          style={({ pressed }) => [
+            styles.fab,
+            {
+              backgroundColor: colors.primary,
+              bottom: bottomInset + 100,
+              opacity: pressed ? 0.85 : 1,
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+              borderRadius: 32,
+            },
+          ]}
+        >
+          <Feather name="plus" size={26} color={colors.primaryForeground} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -265,5 +391,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
+  },
+  // ── Selection bar styles ──
+  selectionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  selBarBtn: {
+    padding: 4,
+  },
+  selBarCount: {
+    fontSize: 16,
+    flex: 1,
+  },
+  selBarActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  selBarActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  selBarActionText: {
+    fontSize: 13,
   },
 });

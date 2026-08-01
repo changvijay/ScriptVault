@@ -13,6 +13,7 @@ import {
   Modal,
   FlatList,
   Linking,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -24,10 +25,12 @@ import { AIAssistant } from '@/components/AIAssistant';
 import { Script, ScriptStatus, VoiceNote, VideoNote, AttachedFile, AttachedFileType } from '@/types';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import { File, Directory, Paths } from 'expo-file-system';
+import JSZip from 'jszip';
 import { getAllProviderMeta } from '@/services/ai/providers';
 import { AIProviderKey } from '@/services/ai/types';
 import { useAI } from '@/context/AIContext';
@@ -218,8 +221,8 @@ export default function ScriptEditorScreen() {
   const [selectedCats, setSelectedCats] = useState<string[]>(existing?.categoryIds ?? []);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(existing?.goalId ?? null);
   const [deadline, setDeadline] = useState<Date | null>(
-    existing?.deadline 
-      ? new Date(existing.deadline) 
+    existing?.deadline
+      ? new Date(existing.deadline)
       : prefillDate ? new Date(prefillDate) : null,
   );
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>(existing?.voiceNotes ?? []);
@@ -287,9 +290,9 @@ export default function ScriptEditorScreen() {
           const oldGoal = goals.find(g => g.id === oldGoalId);
           if (oldGoal) {
             const newProgress = Math.max(0, oldGoal.currentProgress - 1);
-            await updateGoal(oldGoalId, { 
+            await updateGoal(oldGoalId, {
               currentProgress: newProgress,
-              completed: newProgress >= oldGoal.targetValue 
+              completed: newProgress >= oldGoal.targetValue
             });
           }
         }
@@ -370,7 +373,7 @@ export default function ScriptEditorScreen() {
         await new File(uri).copy(destFile);
         setVoiceNotes(prev => [...prev, {
           id: generateId(), uri: dest,
-          duration: recStatus.isLoaded ? recStatus.durationMillis ?? 0 : 0,
+          duration: recStatus.durationMillis ?? 0,
           createdAt: new Date().toISOString(),
         }]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -542,6 +545,83 @@ export default function ScriptEditorScreen() {
   const videoFiles = attachedFiles.filter(f => f.type === 'video');
   const audioFiles = attachedFiles.filter(f => f.type === 'audio');
 
+  const [isZipping, setIsZipping] = useState(false);
+
+  const generateZip = async () => {
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < attachedFiles.length; i++) {
+        const f = attachedFiles[i];
+        const srcFile = new File(f.uri);
+        const base64 = await srcFile.base64();
+
+        let ext = '.bin';
+        const extMatch = f.name?.match(/\.[0-9a-z]+$/i);
+        if (extMatch) {
+          ext = extMatch[0];
+        } else if (f.type === 'image') ext = '.jpg';
+        else if (f.type === 'video') ext = '.mp4';
+        else if (f.type === 'audio') ext = '.m4a';
+
+        const filename = f.name || `attachment_${i + 1}${ext}`;
+        zip.file(filename, base64, { base64: true });
+      }
+
+      const zipBase64 = await zip.generateAsync({ type: 'base64' });
+      const safeTitle = (title || 'Attachments').replace(/[^a-z0-9]/gi, '_');
+      const zipFile = new File(Paths.cache, `ScriptVault_${safeTitle}.zip`);
+
+      // Decode base64 to Uint8Array and write
+      const binaryStr = atob(zipBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      zipFile.write(bytes);
+
+      setIsZipping(false);
+      return zipFile.uri;
+    } catch (e) {
+      setIsZipping(false);
+      console.error('Zip generation error:', e);
+      Alert.alert('Error', 'Failed to generate zip file');
+      return null;
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (attachedFiles.length === 0) return;
+    const zipPath = await generateZip();
+    if (!zipPath) return;
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(zipPath, { UTI: 'public.zip-archive', dialogTitle: 'Save Zip File' });
+    } else {
+      Alert.alert('Error', 'Sharing/Saving is not available on this device.');
+    }
+  };
+
+  const handleShareAll = async () => {
+    if (attachedFiles.length === 0) {
+      Alert.alert('No files', 'There are no files to share.');
+      return;
+    }
+
+    const zipPath = await generateZip();
+    if (!zipPath) return;
+
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(zipPath, { UTI: 'public.zip-archive', dialogTitle: 'Share Attachments' });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device.');
+      }
+    } catch (err) {
+      console.log('Share error:', err);
+    }
+  };
+
   return (
     <>
       <Stack.Screen
@@ -647,7 +727,7 @@ export default function ScriptEditorScreen() {
                   if (!url.startsWith('http://') && !url.startsWith('https://')) {
                     url = 'https://' + url;
                   }
-                  Linking.openURL(url).catch(() => {});
+                  Linking.openURL(url).catch(() => { });
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 }}
               >
@@ -667,7 +747,7 @@ export default function ScriptEditorScreen() {
 
         {/* Categories & Linked Goal */}
         <View style={[styles.section, { borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'flex-start', gap: 20 }]}>
-          
+
           {/* Categories */}
           <View style={{ flex: 1, gap: 10 }}>
             <View style={styles.rowBetween}>
@@ -770,8 +850,8 @@ export default function ScriptEditorScreen() {
             <Pressable
               onPress={() => setDatePickerVisible(true)}
               style={[
-                styles.dateBtn, 
-                { 
+                styles.dateBtn,
+                {
                   backgroundColor: deadline ? colors.primary + '15' : colors.muted,
                   borderColor: deadline ? colors.primary : 'transparent',
                   borderWidth: 1,
@@ -804,13 +884,25 @@ export default function ScriptEditorScreen() {
         {/* ── ATTACHMENTS ─────────────────────────────────────────────── */}
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <View style={styles.rowBetween}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
-              Attachments ({attachedFiles.length})
-            </Text>
-            {attachedFiles.length > 0 && (
-              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                {imageFiles.length} img · {videoFiles.length} vid · {audioFiles.length} audio
+            <View>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
+                Attachments ({attachedFiles.length})
               </Text>
+              {attachedFiles.length > 0 && (
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                  {imageFiles.length} img · {videoFiles.length} vid · {audioFiles.length} audio
+                </Text>
+              )}
+            </View>
+            {attachedFiles.length > 0 && (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable onPress={handleDownloadAll} disabled={isZipping} style={[styles.actionIconBtn, { backgroundColor: colors.muted, opacity: isZipping ? 0.5 : 1 }]}>
+                  {isZipping ? <ActivityIndicator size="small" color={colors.foreground} /> : <Feather name="download" size={15} color={colors.foreground} />}
+                </Pressable>
+                <Pressable onPress={handleShareAll} disabled={isZipping} style={[styles.actionIconBtn, { backgroundColor: colors.muted, opacity: isZipping ? 0.5 : 1 }]}>
+                  {isZipping ? <ActivityIndicator size="small" color={colors.foreground} /> : <Feather name="share" size={15} color={colors.foreground} />}
+                </Pressable>
+              </View>
             )}
           </View>
 
@@ -1163,6 +1255,7 @@ const styles = StyleSheet.create({
   },
   addFileBtnText: { fontSize: 15, color: '#fff' },
 
+  actionIconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderWidth: 1 },
 
   // Add-file modal

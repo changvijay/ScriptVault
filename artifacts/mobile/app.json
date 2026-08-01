@@ -19,7 +19,8 @@
         "NSMicrophoneUsageDescription": "ScriptVault needs microphone access to record voice notes.",
         "NSPhotoLibraryUsageDescription": "ScriptVault needs access to your photo library to attach video notes.",
         "NSPhotoLibraryAddUsageDescription": "ScriptVault needs access to save media files."
-      }
+      },
+      "bundleIdentifier": "com.changitsolutions.scripttracker"
     },
     "android": {
       "permissions": [
@@ -40,7 +41,20 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "ScriptVault needs microphone access to record voice notes."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ScriptVault needs access to your photo library to attach video notes.",
+          "cameraPermission": "ScriptVault needs access to your camera to attach video notes."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -3,15 +3,38 @@ import { AIProvider, AIProviderKey, AIProviderMeta } from './types';
 // ── Provider metadata ────────────────────────────────────────────────────────
 
 const PROVIDER_META: Record<AIProviderKey, AIProviderMeta> = {
+  groq: {
+    key: 'groq',
+    displayName: 'Groq',
+    color: '#00A67E',
+    defaultModel: 'llama-3.3-70b-versatile',
+    models: [
+      { id: 'llama-3.3-70b-versatile', label: 'LLaMA 3.3 70B' },
+      { id: 'llama3-8b-8192', label: 'LLaMA 3 8B' },
+      { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+    ],
+  },
+  openrouter: {
+    key: 'openrouter',
+    displayName: 'OpenRouter',
+    color: '#7C3AED',
+    defaultModel: 'openai/gpt-4o-mini',
+    models: [
+      { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
+      { id: 'openai/gpt-4o', label: 'GPT-4o' },
+      { id: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'LLaMA 3.3 70B' },
+    ],
+  },
   gemini: {
     key: 'gemini',
     displayName: 'Google Gemini',
     color: '#4285F4',
     defaultModel: 'gemini-2.0-flash',
     models: [
-      { id: 'gemini-2.0-flash',  label: 'Gemini 2.0 Flash' },
-      { id: 'gemini-2.5-flash',  label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-pro',    label: 'Gemini 2.5 Pro'   },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
     ],
   },
   claude: {
@@ -21,31 +44,8 @@ const PROVIDER_META: Record<AIProviderKey, AIProviderMeta> = {
     defaultModel: 'claude-3-5-haiku-20241022',
     models: [
       { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-      { id: 'claude-sonnet-4-5',         label: 'Claude Sonnet 4.5' },
-      { id: 'claude-opus-4-5',           label: 'Claude Opus 4.5'   },
-    ],
-  },
-  groq: {
-    key: 'groq',
-    displayName: 'Groq',
-    color: '#00A67E',
-    defaultModel: 'llama-3.3-70b-versatile',
-    models: [
-      { id: 'llama-3.3-70b-versatile', label: 'LLaMA 3.3 70B'    },
-      { id: 'llama3-8b-8192',          label: 'LLaMA 3 8B'        },
-      { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8x7B'      },
-    ],
-  },
-  openrouter: {
-    key: 'openrouter',
-    displayName: 'OpenRouter',
-    color: '#7C3AED',
-    defaultModel: 'openai/gpt-4o-mini',
-    models: [
-      { id: 'openai/gpt-4o-mini',              label: 'GPT-4o Mini'         },
-      { id: 'openai/gpt-4o',                   label: 'GPT-4o'              },
-      { id: 'anthropic/claude-3.5-sonnet',     label: 'Claude 3.5 Sonnet'  },
-      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'LLaMA 3.3 70B'   },
+      { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+      { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
     ],
   },
 };
@@ -58,7 +58,7 @@ async function throwIfNotOk(res: Response): Promise<void> {
   try {
     const body = await res.json();
     msg = body?.error?.message ?? body?.error?.code ?? body?.message ?? msg;
-  } catch {}
+  } catch { }
   throw new Error(msg);
 }
 
@@ -167,7 +167,7 @@ const groqProvider: AIProvider = {
           max_tokens: 2048,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user',   content: userContent  },
+            { role: 'user', content: userContent },
           ],
         }),
       },
@@ -208,7 +208,7 @@ const openrouterProvider: AIProvider = {
           max_tokens: 2048,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user',   content: userContent  },
+            { role: 'user', content: userContent },
           ],
         }),
       },

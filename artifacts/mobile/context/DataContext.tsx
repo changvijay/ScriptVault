@@ -25,6 +25,7 @@ interface DataContextType {
   createScript: (data: Partial<Script>) => Promise<Script>;
   updateScript: (id: string, updates: Partial<Script>) => Promise<void>;
   deleteScript: (id: string) => Promise<void>;
+  deleteScripts: (ids: string[]) => Promise<void>;
   createCategory: (name: string, color: string) => Promise<Category>;
   updateCategory: (id: string, name: string, color: string) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -35,6 +36,8 @@ interface DataContextType {
   updateTodo: (id: string, updates: Partial<TodoItem>) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
+  importData: (data: { scripts: Partial<Script>[] }) => Promise<void>;
+  exportData: () => { scripts: Script[]; categories: Category[]; goals: Goal[] };
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -108,6 +111,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteScript = async (id: string) => {
     const updated = scripts.filter(s => s.id !== id);
+    setScripts(updated);
+    await saveScripts(updated);
+  };
+
+  const deleteScripts = async (ids: string[]) => {
+    const idSet = new Set(ids);
+    const updated = scripts.filter(s => !idSet.has(s.id));
     setScripts(updated);
     await saveScripts(updated);
   };
@@ -199,14 +209,47 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await saveTodos(updated);
   };
 
+  const importData = async (data: {
+    scripts: Partial<Script>[];
+  }) => {
+    const now = new Date().toISOString();
+
+    // Import scripts only
+    const newScripts: Script[] = data.scripts.map(s => ({
+      id: generateId(),
+      title: s.title ?? 'Untitled Script',
+      notes: s.notes ?? '',
+      reference: s.reference ?? '',
+      status: s.status ?? 'not_started',
+      categoryIds: s.categoryIds ?? [],
+      goalId: s.goalId,
+      deadline: s.deadline ?? null,
+      voiceNotes: s.voiceNotes ?? [],
+      videoNotes: s.videoNotes ?? [],
+      attachedFiles: s.attachedFiles ?? [],
+      createdAt: now,
+      modifiedAt: now,
+    }));
+    const updatedScripts = [...newScripts, ...scripts];
+    setScripts(updatedScripts);
+    await saveScripts(updatedScripts);
+  };
+
+  const exportData = () => ({
+    scripts,
+    categories,
+    goals,
+  });
+
   return (
     <DataContext.Provider
       value={{
         scripts, categories, goals, todos, loading,
-        createScript, updateScript, deleteScript,
+        createScript, updateScript, deleteScript, deleteScripts,
         createCategory, updateCategory, deleteCategory,
         createGoal, updateGoal, deleteGoal,
         createTodo, updateTodo, deleteTodo, toggleTodo,
+        importData, exportData,
       }}
     >
       {children}

@@ -9,15 +9,19 @@ import {
   TextInput,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '@/context/DataContext';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { Category } from '@/types';
 import { AIProvidersSettings } from '@/components/AIProvidersSettings';
 import { ContentNichesSettings } from '@/components/ContentNichesSettings';
+import { exportToExcel, validateExcelFile, generateSampleExcel } from '@/services/excelService';
 
 const PALETTE = [
   '#EF4444', '#F97316', '#F59E0B', '#84CC16',
@@ -28,7 +32,11 @@ const PALETTE = [
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { categories, scripts, goals, createCategory, updateCategory, deleteCategory } = useData();
+  const { categories, scripts, goals, createCategory, updateCategory, deleteCategory, importData, exportData } = useData();
+
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editCat, setEditCat] = useState<Category | null>(null);
@@ -83,6 +91,110 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const fileUri = await generateSampleExcel({ categories, goals });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          UTI: 'org.openxmlformats.spreadsheetml.sheet',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: 'Download Sample Template',
+        });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device.');
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert('Template Error', e.message ?? 'Something went wrong.');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = exportData();
+      const fileUri = exportToExcel(data);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          UTI: 'org.openxmlformats.spreadsheetml.sheet',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: 'Export ScriptVault Data',
+        });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device.');
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert('Export Failed', e.message ?? 'Something went wrong.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setImporting(false);
+        return;
+      }
+
+      const fileUri = result.assets[0].uri;
+      const validation = await validateExcelFile(fileUri, scripts, categories, goals);
+
+      if (!validation.valid) {
+        const errorList = validation.errors.slice(0, 10).join('\n');
+        const more = validation.errors.length > 10 ? `\n...and ${validation.errors.length - 10} more errors` : '';
+        Alert.alert(
+          'Validation Failed',
+          `Found ${validation.errors.length} error(s):\n\n${errorList}${more}`,
+        );
+        setImporting(false);
+        return;
+      }
+
+      const { count, warnings } = validation;
+      const summary = `${count} script(s)`;
+
+      const warningText = warnings.length > 0
+        ? `\n\nWarnings:\n${warnings.slice(0, 5).join('\n')}${warnings.length > 5 ? `\n...and ${warnings.length - 5} more` : ''}`
+        : '';
+
+      Alert.alert(
+        'Import Scripts',
+        `Ready to import ${summary}.${warningText}\n\nThis will add the scripts alongside your existing data.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
+          {
+            text: 'Import',
+            onPress: async () => {
+              try {
+                await importData(validation.data);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', `Imported ${summary} successfully!`);
+              } catch (e: any) {
+                Alert.alert('Import Failed', e.message ?? 'Something went wrong.');
+              } finally {
+                setImporting(false);
+              }
+            },
+          },
+        ],
+      );
+    } catch (e: any) {
+      Alert.alert('Import Failed', e.message ?? 'Could not read the file.');
+      setImporting(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -118,6 +230,91 @@ export default function SettingsScreen() {
               <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{categories.length}</Text>
               <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>Categories</Text>
             </View>
+          </View>
+        </View>
+
+        {/* Import & Export */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16 }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+            Import & Export
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13, marginBottom: 4 }}>
+            Export your data to Excel or import from a .xlsx file.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable
+              onPress={handleExport}
+              disabled={exporting || importing || downloadingTemplate}
+              style={({ pressed }) => [
+                styles.ioBtn,
+                {
+                  backgroundColor: pressed ? colors.primary + '18' : colors.muted,
+                  borderColor: colors.border,
+                  borderRadius: colors.radius,
+                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                },
+              ]}
+            >
+              {exporting ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="download" size={18} color={colors.primary} />
+              )}
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
+                Export
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleImport}
+              disabled={exporting || importing || downloadingTemplate}
+              style={({ pressed }) => [
+                styles.ioBtn,
+                {
+                  backgroundColor: pressed ? colors.primary + '18' : colors.muted,
+                  borderColor: colors.border,
+                  borderRadius: colors.radius,
+                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                },
+              ]}
+            >
+              {importing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="upload" size={18} color={colors.primary} />
+              )}
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
+                Import
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Sample Template */}
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 }}>
+            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, marginBottom: 8 }}>
+              Download a pre-formatted template with dropdowns for Status, Categories & Goal, and date pickers for Deadline, Created & Modified.
+            </Text>
+            <Pressable
+              onPress={handleDownloadTemplate}
+              disabled={exporting || importing || downloadingTemplate}
+              style={({ pressed }) => [
+                styles.ioBtn,
+                {
+                  backgroundColor: pressed ? '#8B5CF6' + '18' : colors.muted,
+                  borderColor: '#8B5CF6' + '40',
+                  borderRadius: colors.radius,
+                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                },
+              ]}
+            >
+              {downloadingTemplate ? (
+                <ActivityIndicator size="small" color="#8B5CF6" />
+              ) : (
+                <Feather name="file-text" size={18} color="#8B5CF6" />
+              )}
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
+                Sample Template
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -352,6 +549,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+  },
+  ioBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

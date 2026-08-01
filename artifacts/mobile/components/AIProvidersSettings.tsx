@@ -31,9 +31,9 @@ const ALL_METAS = getAllProviderMeta();
 function StatusBadge({ status }: { status: 'connected' | 'not_configured' | 'disabled' }) {
   const colors = useColors();
   const config = {
-    connected:      { color: '#10B981', label: 'Connected'    },
+    connected: { color: '#10B981', label: 'Connected' },
     not_configured: { color: colors.mutedForeground, label: 'Not configured' },
-    disabled:       { color: colors.mutedForeground, label: 'Disabled'       },
+    disabled: { color: colors.mutedForeground, label: 'Disabled' },
   }[status];
 
   return (
@@ -134,9 +134,9 @@ function ProviderConfigModal({
             {saving ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={{ 
-                color: (apiKey.trim() && apiKey.trim() !== (existing?.apiKey ?? '').trim() && testStatus !== 'ok') ? colors.mutedForeground : colors.primary, 
-                fontFamily: 'Inter_600SemiBold', 
+              <Text style={{
+                color: (apiKey.trim() && apiKey.trim() !== (existing?.apiKey ?? '').trim() && testStatus !== 'ok') ? colors.mutedForeground : colors.primary,
+                fontFamily: 'Inter_600SemiBold',
                 fontSize: 16,
                 opacity: (apiKey.trim() && apiKey.trim() !== (existing?.apiKey ?? '').trim() && testStatus !== 'ok') ? 0.6 : 1,
               }}>
