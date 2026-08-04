@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '@/context/DataContext';
 import { GoalCard } from '@/components/GoalCard';
 import { EmptyState } from '@/components/EmptyState';
-import { DatePickerModal } from '@/components/DatePickerModal';
+import { DatePickerModal } from "@/components/DatePickerModal";
 import { Feather } from '@expo/vector-icons';
 import { Goal } from '@/types';
 import * as Haptics from 'expo-haptics';
@@ -333,6 +333,7 @@ export default function GoalsScreen() {
         <DatePickerModal
           visible={datePickerVisible}
           date={form.deadline}
+          blockPastDates={true}
           onConfirm={d => { setForm(f => ({ ...f, deadline: d })); setDatePickerVisible(false); }}
           onClose={() => setDatePickerVisible(false)}
         />

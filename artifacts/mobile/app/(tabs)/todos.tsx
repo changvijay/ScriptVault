@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
@@ -26,12 +27,14 @@ type Priority = TodoItem['priority'];
 type FilterType = 'all' | 'active' | 'completed';
 
 const PRIORITY_CONFIG: Record<Priority, { label: string; color: string }> = {
-  low:    { label: 'Low',    color: '#6B7280' },
+  low: { label: 'Low', color: '#6B7280' },
   medium: { label: 'Medium', color: '#F59E0B' },
-  high:   { label: 'High',   color: '#EF4444' },
+  high: { label: 'High', color: '#EF4444' },
 };
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const PAGE_SIZE = 5;
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -131,6 +134,11 @@ function TodoRow({
 }
 
 // ─── Add / Edit modal ──────────────────────────────────────────────────────
+// Redesigned for keyboard ergonomics:
+//  - Header (Cancel / Title / Save) is FIXED — never pushed offscreen by the keyboard
+//  - Body scrolls independently in a ScrollView with keyboardShouldPersistTaps="handled"
+//    so priority chips / due-date button are tappable without a throwaway dismiss-tap
+//  - Sheet has a max-height instead of auto-grow, so it behaves predictably with KAV
 function TodoModal({
   visible,
   colors,
@@ -141,7 +149,7 @@ function TodoModal({
 }: {
   visible: boolean;
   colors: ReturnType<typeof useColors>;
-  insets: { bottom: number };
+  insets: { bottom: number; top: number };
   initial?: Partial<TodoItem>;
   onClose: () => void;
   onSave: (data: Partial<TodoItem>) => void;
@@ -154,7 +162,7 @@ function TodoModal({
   const [datePicker, setDatePicker] = useState(false);
 
   // Reset when modal opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       setText(initial?.text ?? '');
       setPriority(initial?.priority ?? 'medium');
@@ -162,8 +170,10 @@ function TodoModal({
     }
   }, [visible]);
 
+  const canSave = !!text.trim();
+
   const handleSave = () => {
-    if (!text.trim()) return;
+    if (!canSave) return;
     onSave({
       text: text.trim(),
       priority,
@@ -176,95 +186,130 @@ function TodoModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
-      >
-        <Pressable style={{ flex: 1 }} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+      <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-          <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
-            {isEditing ? 'Edit Task' : 'New Task'}
-          </Text>
-
-          {/* Text input */}
-          <TextInput
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+          style={styles.kavWrapper}
+        >
+          <View
             style={[
-              styles.todoInput,
-              { color: colors.foreground, backgroundColor: colors.muted, borderRadius: 12, fontFamily: 'Inter_400Regular', borderColor: colors.border },
+              styles.modalSheet,
+              { backgroundColor: colors.card, maxHeight: '100%', borderColor: colors.border },
             ]}
-            value={text}
-            onChangeText={setText}
-            placeholder="What needs to be done?"
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            autoFocus
-            returnKeyType="done"
-          />
+          >
 
-          {/* Priority picker */}
-          <Text style={[styles.modalLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Priority</Text>
-          <View style={styles.priorityRow}>
-            {(['low', 'medium', 'high'] as Priority[]).map(p => {
-              const active = priority === p;
-              const pc = PRIORITY_CONFIG[p];
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => { setPriority(p); Haptics.selectionAsync(); }}
+            {/* ── Fixed header: always visible, keyboard or not ── */}
+            <View style={[styles.modalHeaderRow, { borderBottomColor: colors.border }]}>
+              <Pressable onPress={onClose} hitSlop={10} style={styles.headerBtn}>
+                <Text style={[styles.headerBtnText, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                {isEditing ? 'Edit Task' : 'New Task'}
+              </Text>
+
+              <Pressable
+                onPress={handleSave}
+                disabled={!canSave}
+                hitSlop={10}
+                style={[
+                  styles.headerSaveBtn,
+                  { backgroundColor: canSave ? colors.primary : colors.muted, borderRadius: 8 },
+                ]}
+              >
+                <Text
                   style={[
-                    styles.priorityChip,
-                    {
-                      backgroundColor: active ? pc.color + '22' : colors.muted,
-                      borderColor: active ? pc.color : colors.border,
-                      borderRadius: 20,
-                    },
+                    styles.headerSaveBtnText,
+                    { color: canSave ? colors.primaryForeground : colors.mutedForeground, fontFamily: 'Inter_600SemiBold' },
                   ]}
                 >
-                  <Text style={[styles.priorityChipText, { color: active ? pc.color : colors.mutedForeground, fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
-                    {pc.label}
+                  Save
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* ── Scrollable body ── */}
+            <ScrollView
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={[styles.modalBody, { paddingBottom: insets.bottom + 20 }]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Text input */}
+              <TextInput
+                style={[
+                  styles.todoInput,
+                  { color: colors.foreground, backgroundColor: colors.muted, borderRadius: 12, fontFamily: 'Inter_400Regular', borderColor: colors.border },
+                ]}
+                value={text}
+                onChangeText={setText}
+                placeholder="What needs to be done?"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                autoFocus
+                blurOnSubmit={false}
+                returnKeyType="done"
+              />
+
+              {/* Priority picker */}
+              <Text style={[styles.modalLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Priority</Text>
+              <View style={styles.priorityRow}>
+                {(['low', 'medium', 'high'] as Priority[]).map(p => {
+                  const active = priority === p;
+                  const pc = PRIORITY_CONFIG[p];
+                  return (
+                    <Pressable
+                      key={p}
+                      onPress={() => { setPriority(p); Haptics.selectionAsync(); }}
+                      style={[
+                        styles.priorityChip,
+                        {
+                          backgroundColor: active ? pc.color + '22' : colors.muted,
+                          borderColor: active ? pc.color : colors.border,
+                          borderRadius: 20,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.priorityChipText, { color: active ? pc.color : colors.mutedForeground, fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+                        {pc.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Due date */}
+              <Text style={[styles.modalLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Due Date</Text>
+              <View style={styles.dueDateRow}>
+                <Pressable
+                  onPress={() => setDatePicker(true)}
+                  style={[styles.dueDateBtn, { backgroundColor: colors.muted, borderRadius: 10, borderColor: colors.border, flex: 1 }]}
+                >
+                  <Feather name="calendar" size={15} color={dueDate ? colors.primary : colors.mutedForeground} />
+                  <Text style={{ color: dueDate ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 15 }}>
+                    {dueDate ? `${MONTHS[dueDate.getMonth()]} ${dueDate.getDate()}, ${dueDate.getFullYear()}` : 'No due date'}
                   </Text>
                 </Pressable>
-              );
-            })}
+                {dueDate && (
+                  <Pressable onPress={() => setDueDate(null)} style={[styles.clearBtn, { backgroundColor: colors.muted, borderRadius: 10 }]}>
+                    <Feather name="x" size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                )}
+              </View>
+            </ScrollView>
           </View>
-
-          {/* Due date */}
-          <Text style={[styles.modalLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Due Date</Text>
-          <View style={styles.dueDateRow}>
-            <Pressable
-              onPress={() => setDatePicker(true)}
-              style={[styles.dueDateBtn, { backgroundColor: colors.muted, borderRadius: 10, borderColor: colors.border, flex: 1 }]}
-            >
-              <Feather name="calendar" size={15} color={dueDate ? colors.primary : colors.mutedForeground} />
-              <Text style={{ color: dueDate ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 15 }}>
-                {dueDate ? `${MONTHS[dueDate.getMonth()]} ${dueDate.getDate()}, ${dueDate.getFullYear()}` : 'No due date'}
-              </Text>
-            </Pressable>
-            {dueDate && (
-              <Pressable onPress={() => setDueDate(null)} style={[styles.clearBtn, { backgroundColor: colors.muted, borderRadius: 10 }]}>
-                <Feather name="x" size={16} color={colors.mutedForeground} />
-              </Pressable>
-            )}
-          </View>
-
-          {/* Save */}
-          <Pressable
-            onPress={handleSave}
-            disabled={!text.trim()}
-            style={[styles.saveBtn, { backgroundColor: text.trim() ? colors.primary : colors.muted, borderRadius: 12 }]}
-          >
-            <Text style={[styles.saveBtnText, { color: text.trim() ? colors.primaryForeground : colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
-              {isEditing ? 'Save Changes' : 'Add Task'}
-            </Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
 
       <DatePickerModal
         visible={datePicker}
         date={dueDate}
+        blockPastDates={true}
         onConfirm={d => { setDueDate(d); setDatePicker(false); }}
         onClose={() => setDatePicker(false)}
       />
@@ -281,6 +326,10 @@ export default function TodosScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const searchInputRef = useRef<TextInput>(null);
 
   const { prefillDate } = useLocalSearchParams<{ prefillDate?: string }>();
 
@@ -299,7 +348,12 @@ export default function TodosScreen() {
     let list = [...todos];
     if (filter === 'active') list = list.filter(t => !t.completed);
     if (filter === 'completed') list = list.filter(t => t.completed);
-    // Sort: incomplete first, then by priority (high > medium > low), then by due date
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        t => (t.text || '').toLowerCase().includes(q)
+      );
+    }
     const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     list.sort((a, b) => {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -311,7 +365,7 @@ export default function TodosScreen() {
       return 0;
     });
     return list;
-  }, [todos, filter]);
+  }, [todos, filter, search]);
 
   const stats = useMemo(() => ({
     total: todos.length,
@@ -319,6 +373,17 @@ export default function TodosScreen() {
     completed: todos.filter(t => t.completed).length,
     overdue: todos.filter(t => isOverdue(t.dueDate, t.completed)).length,
   }), [todos]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(0);
+  }, [filter, search]);
+
+  const paged = useMemo(
+    () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page],
+  );
 
   const openEdit = (todo: TodoItem) => {
     setEditingTodo(todo);
@@ -391,6 +456,50 @@ export default function TodosScreen() {
           )}
         </View>
         <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (showSearch) {
+                setShowSearch(false);
+                setSearch('');
+                Keyboard.dismiss();
+              } else {
+                setShowSearch(true);
+                setTimeout(() => {
+                  searchInputRef.current?.focus();
+                }, 50);
+              }
+            }}
+            style={[
+              styles.searchHeaderBtn,
+              {
+                backgroundColor: showSearch ? colors.primary : colors.muted,
+                borderRadius: 8,
+              },
+            ]}
+            accessibilityLabel="Search tasks"
+            accessibilityRole="button"
+          >
+            <Feather
+              name={showSearch ? 'x' : 'search'}
+              size={14}
+              color={showSearch ? colors.primaryForeground : colors.mutedForeground}
+            />
+            <Text
+              style={[
+                styles.searchHeaderText,
+                {
+                  color: showSearch
+                    ? colors.primaryForeground
+                    : colors.mutedForeground,
+                  fontFamily: 'Inter_500Medium',
+                },
+              ]}
+            >
+              {showSearch ? 'Close' : 'Search'}
+            </Text>
+          </Pressable>
+
           {stats.completed > 0 && (
             <Pressable onPress={handleClearCompleted} style={[styles.clearDoneBtn, { backgroundColor: colors.muted, borderRadius: 8 }]}>
               <Feather name="check-square" size={14} color={colors.mutedForeground} />
@@ -399,6 +508,49 @@ export default function TodosScreen() {
           )}
         </View>
       </View>
+
+      {/* Search Bar */}
+      {showSearch && (
+        <View style={[styles.searchBarWrap, { borderBottomColor: colors.border }]}>
+          <View
+            style={[
+              styles.searchInputBox,
+              {
+                backgroundColor: colors.muted,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Feather name="search" size={16} color={colors.mutedForeground} />
+            <TextInput
+              ref={searchInputRef}
+              style={[
+                styles.searchInput,
+                { color: colors.foreground, fontFamily: 'Inter_400Regular' },
+              ]}
+              placeholder="Search tasks…"
+              placeholderTextColor={colors.mutedForeground}
+              value={search}
+              onChangeText={setSearch}
+              accessibilityLabel="Search tasks"
+              returnKeyType="search"
+            />
+            {search.length > 0 && (
+              <Pressable
+                onPress={() => setSearch('')}
+                hitSlop={10}
+                accessibilityLabel="Clear search text"
+              >
+                <Feather
+                  name="x-circle"
+                  size={15}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Filter chips */}
       <View style={[styles.filterRow, { borderBottomColor: colors.border }]}>
@@ -430,13 +582,27 @@ export default function TodosScreen() {
       {/* List */}
       {filtered.length === 0 ? (
         <EmptyState
-          icon="check-square"
-          title={filter === 'completed' ? 'No completed tasks' : filter === 'active' ? 'No active tasks' : 'No tasks yet'}
-          subtitle={filter === 'all' ? 'Tap + to add your first task' : 'Switch filter to see other tasks'}
+          icon={search ? 'search' : 'check-square'}
+          title={
+            search
+              ? 'No matching tasks'
+              : filter === 'completed'
+              ? 'No completed tasks'
+              : filter === 'active'
+              ? 'No active tasks'
+              : 'No tasks yet'
+          }
+          subtitle={
+            search
+              ? 'Try a different keyword or clear your search'
+              : filter === 'all'
+              ? 'Tap + to add your first task'
+              : 'Switch filter to see other tasks'
+          }
         />
       ) : (
         <FlatList
-          data={filtered}
+          data={paged}
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: 16, paddingBottom: bottomInset + 174, gap: 10 }}
           showsVerticalScrollIndicator={false}
@@ -452,6 +618,49 @@ export default function TodosScreen() {
               onDelete={() => handleDelete(item.id)}
             />
           )}
+          ListFooterComponent={
+            filtered.length > PAGE_SIZE ? (
+              <View style={styles.pagination}>
+                <Pressable
+                  onPress={() => {
+                    setPage(p => Math.max(0, p - 1));
+                    Haptics.selectionAsync();
+                  }}
+                  disabled={page === 0}
+                  hitSlop={8}
+                  style={[
+                    styles.pageBtn,
+                    { backgroundColor: colors.muted, opacity: page === 0 ? 0.4 : 1 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous page"
+                >
+                  <Feather name="chevron-left" size={18} color={colors.foreground} />
+                </Pressable>
+
+                <Text style={[styles.pageLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>
+                  Page {page + 1} of {totalPages}
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    setPage(p => Math.min(totalPages - 1, p + 1));
+                    Haptics.selectionAsync();
+                  }}
+                  disabled={page >= totalPages - 1}
+                  hitSlop={8}
+                  style={[
+                    styles.pageBtn,
+                    { backgroundColor: colors.muted, opacity: page >= totalPages - 1 ? 0.4 : 1 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next page"
+                >
+                  <Feather name="chevron-right" size={18} color={colors.foreground} />
+                </Pressable>
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -466,7 +675,7 @@ export default function TodosScreen() {
       <TodoModal
         visible={modalVisible}
         colors={colors}
-        insets={{ bottom: bottomInset }}
+        insets={{ bottom: bottomInset, top: topInset }}
         initial={editingTodo ?? undefined}
         onClose={() => { setModalVisible(false); setEditingTodo(null); }}
         onSave={handleSave}
@@ -489,8 +698,52 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28 },
   headerSub: { fontSize: 13, marginTop: 2 },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  searchHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  searchHeaderText: { fontSize: 12 },
   clearDoneBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6 },
   clearDoneText: { fontSize: 12 },
+
+  searchBarWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  searchInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 16,
+  },
+  pageBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageLabel: {
+    fontSize: 13,
+  },
 
   filterRow: {
     flexDirection: 'row',
@@ -530,17 +783,41 @@ const styles = StyleSheet.create({
   rowActions: { flexDirection: 'column', gap: 4, paddingRight: 12, paddingVertical: 10 },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center' },
+  kavWrapper: { width: '100%', paddingHorizontal: 20 },
   modalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 24,
+    paddingTop: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+
+  // Fixed header (new)
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  headerBtn: { paddingVertical: 6, paddingRight: 6, minWidth: 60 },
+  headerBtnText: { fontSize: 15 },
+  modalTitle: { fontSize: 17, flex: 1, textAlign: 'center' },
+  headerSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, minWidth: 60, alignItems: 'center' },
+  headerSaveBtnText: { fontSize: 15 },
+
+  // Scrollable body (new)
+  modalBody: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 16,
     gap: 12,
   },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
-  modalTitle: { fontSize: 20 },
-  modalLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
+
   todoInput: {
     fontSize: 16,
     padding: 14,
@@ -549,14 +826,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     lineHeight: 23,
   },
+  modalLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
   priorityRow: { flexDirection: 'row', gap: 8 },
   priorityChip: { paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1.5 },
   priorityChipText: { fontSize: 14 },
   dueDateRow: { flexDirection: 'row', gap: 8 },
   dueDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
   clearBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  saveBtn: { paddingVertical: 15, alignItems: 'center', marginTop: 4 },
-  saveBtnText: { fontSize: 16 },
 
   // FAB
   fab: {

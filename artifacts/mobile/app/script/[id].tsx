@@ -1077,7 +1077,7 @@ export default function ScriptEditorScreen() {
       <DatePickerModal
         visible={datePickerVisible}
         date={deadline}
-        minDate={new Date()}
+        blockPastDates={true}
         onConfirm={d => { setDeadline(d); setDatePickerVisible(false); }}
         onClose={() => setDatePickerVisible(false)}
       />

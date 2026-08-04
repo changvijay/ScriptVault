@@ -67,6 +67,7 @@ function ClassicTabLayout() {
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
       }}
+      sceneContainerStyle={{ backgroundColor: colors.background }}
     >
       <Tabs.Screen
         name="index"
@@ -138,3 +139,4 @@ export default function TabLayout() {
   }
   return <ClassicTabLayout />;
 }
+

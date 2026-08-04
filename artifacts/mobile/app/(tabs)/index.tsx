@@ -1,6 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  ScrollView,
   View,
   Text,
   StyleSheet,
@@ -13,8 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useData } from "@/context/DataContext";
 import { ProgressRing } from "@/components/ProgressRing";
 import { StatCard } from "@/components/StatCard";
-import { ScriptCard } from "@/components/ScriptCard";
-import { GoalCard } from "@/components/GoalCard";
+import { CompactScriptRow } from "@/components/CompactScriptRow";
+import { CompactGoalRow } from "@/components/CompactGoalRow";
 import { EmptyState } from "@/components/EmptyState";
 import { MonthCalendar } from "@/components/MonthCalendar";
 import { router } from "expo-router";
@@ -46,6 +45,9 @@ export default function DashboardScreen() {
   const { scripts, categories, goals, todos, updateScript, updateGoal } = useData();
 
   const now = new Date();
+
+  // ── Tab state for scripts panel ───────────────────────────────────
+  const [scriptsTab, setScriptsTab] = useState<"due" | "recent">("due");
 
   // ── Script stats ──────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -90,7 +92,7 @@ export default function DashboardScreen() {
           (a, b) =>
             new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime(),
         )
-        .slice(0, 4),
+        .slice(0, 3),
     [scripts],
   );
 
@@ -116,6 +118,15 @@ export default function DashboardScreen() {
     [goals],
   );
 
+  // ── Overdue/urgent alerts ─────────────────────────────────────────
+  const hasOverdueScripts = stats.overdue > 0;
+  const hasOverdueTodos = todoStats.overdue > 0;
+  const hasHighPriority = todoStats.highPriority > 0;
+  const showAlertBanner = hasOverdueScripts || hasOverdueTodos || hasHighPriority;
+
+  // Auto-select tab: prefer "due" if there are upcoming deadlines, else "recent"
+  const effectiveTab = scriptsTab === "due" && upcomingDeadlines.length === 0 ? "recent" : scriptsTab;
+
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   // Tab bar is 84px on web, ~83px on iOS native → +100 clears it with room
   const bottomPad = Platform.OS === "web" ? 100 : insets.bottom + 100;
@@ -125,7 +136,7 @@ export default function DashboardScreen() {
       style={[styles.scroll, { backgroundColor: colors.background }]}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: topInset + 16, paddingBottom: bottomPad },
+        { paddingTop: topInset + 12, paddingBottom: bottomPad },
       ]}
       showsVerticalScrollIndicator={false}
     >
@@ -185,7 +196,56 @@ export default function DashboardScreen() {
         </View>
       </Animated.View>
 
-      {/* ── Scripts KPI ── */}
+      {/* ── Overdue / High Priority Alert ── */}
+      {showAlertBanner && (
+        <Animated.View entering={FadeInUp.delay(250).springify()}>
+          <View
+            style={[
+              styles.alertBanner,
+              {
+                backgroundColor: colors.destructive + "10",
+                borderColor: colors.destructive + "30",
+                marginHorizontal: 16,
+              },
+            ]}
+          >
+            <View style={styles.alertContent}>
+              <Text
+                style={[
+                  styles.alertText,
+                  { color: colors.destructive, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                ⚡{" "}
+                {[
+                  hasOverdueScripts && `${stats.overdue} overdue script${stats.overdue > 1 ? "s" : ""}`,
+                  hasOverdueTodos && `${todoStats.overdue} overdue task${todoStats.overdue > 1 ? "s" : ""}`,
+                  hasHighPriority && !hasOverdueTodos && `${todoStats.highPriority} high-priority`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                if (hasOverdueScripts) router.push("/(tabs)/scripts");
+                else router.push("/(tabs)/todos");
+              }}
+            >
+              <Text
+                style={[
+                  styles.alertLink,
+                  { color: colors.destructive, fontFamily: "Inter_500Medium" },
+                ]}
+              >
+                View →
+              </Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* ── Unified KPI Card ── */}
       <Animated.View
         entering={FadeInUp.delay(200).springify()}
         style={[
@@ -197,77 +257,84 @@ export default function DashboardScreen() {
           },
         ]}
       >
-        {/* Card header */}
-        <View style={styles.kpiCardHead}>
-          <Text
-            style={[
-              styles.kpiCardTitle,
-              { color: colors.foreground, fontFamily: "Inter_700Bold" },
-            ]}
-          >
-            Scripts
-          </Text>
-          <Text
-            style={[
-              styles.kpiCardSub,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            {stats.pct}% complete
-          </Text>
-        </View>
-
-        {/* Ring + stats grid */}
-        <View style={styles.kpiBody}>
+        {/* Scripts row: ring + inline stats */}
+        <View style={styles.kpiSection}>
           <ProgressRing
             progress={stats.pct}
-            size={100}
-            strokeWidth={9}
+            size={72}
+            strokeWidth={7}
             color={colors.primary}
             backgroundColor={colors.muted}
             label={`${stats.pct}%`}
-            sublabel="Done"
             labelColor={colors.foreground}
-            sublabelColor={colors.mutedForeground}
           />
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiRow}>
-              <StatCard
-                label="Total"
-                value={stats.total}
-                accent={colors.primary}
-                small
-              />
-              <StatCard
-                label="Done"
-                value={stats.completed}
-                accent={colors.completed}
-                small
+          <View style={styles.kpiStatsCol}>
+            <Text
+              style={[
+                styles.kpiLabel,
+                { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+              ]}
+            >
+              Scripts
+            </Text>
+            <View style={styles.inlineStatsRow}>
+              <StatCard label="Total" value={stats.total} accent={colors.primary} inline />
+              <StatCard label="Done" value={stats.completed} accent={colors.completed} inline />
+              <StatCard label="Overdue" value={stats.overdue} accent={colors.destructive} inline />
+            </View>
+          </View>
+        </View>
+
+        {/* Divider */}
+        <View style={[styles.kpiDivider, { backgroundColor: colors.border }]} />
+
+        {/* To-Do row: bar + inline stats */}
+        <View style={styles.kpiSection}>
+          <View style={styles.kpiStatsCol}>
+            <View style={styles.todoHeaderRow}>
+              <Text
+                style={[
+                  styles.kpiLabel,
+                  { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                To-Do
+              </Text>
+              <Text
+                style={[
+                  styles.kpiPct,
+                  { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+                ]}
+              >
+                {todoStats.pct}%
+              </Text>
+            </View>
+            {/* Progress bar */}
+            <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${todoStats.pct}%` as any,
+                    backgroundColor:
+                      todoStats.pct === 100 ? colors.completed : colors.inProgress,
+                  },
+                ]}
               />
             </View>
-            <View style={styles.kpiRow}>
-              <StatCard
-                label="Active"
-                value={stats.inProgress}
-                accent={colors.inProgress}
-                small
-              />
-              <StatCard
-                label="Overdue"
-                value={stats.overdue}
-                accent={
-                  stats.overdue > 0
-                    ? colors.destructive
-                    : colors.mutedForeground
-                }
-                small
-              />
+            <View style={styles.inlineStatsRow}>
+              <StatCard label="Total" value={todoStats.total} accent={colors.primary} inline />
+              <StatCard label="Done" value={todoStats.completed} accent={colors.completed} inline />
+              <StatCard label="Active" value={todoStats.active} accent={colors.inProgress} inline />
+              {todoStats.overdue > 0 && (
+                <StatCard label="Overdue" value={todoStats.overdue} accent={colors.destructive} inline />
+              )}
             </View>
           </View>
         </View>
       </Animated.View>
 
-      {/* ── Monthly Calendar ── */}
+      {/* ── Monthly Calendar (UNCHANGED) ── */}
       <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text
@@ -286,121 +353,9 @@ export default function DashboardScreen() {
         />
       </Animated.View>
 
-      {/* ── To-Do KPI ── */}
-      <Animated.View
-        entering={FadeInUp.delay(400).springify()}
-        style={[
-          styles.kpiCard,
-          {
-            backgroundColor: colors.card,
-            borderRadius: colors.radius,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {/* Card header */}
-        <View style={styles.kpiCardHead}>
-          <Text
-            style={[
-              styles.kpiCardTitle,
-              { color: colors.foreground, fontFamily: "Inter_700Bold" },
-            ]}
-          >
-            To-Do List
-          </Text>
-          <Text
-            style={[
-              styles.kpiCardSub,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            {todoStats.pct}% complete
-          </Text>
-        </View>
-
-        {/* Progress bar */}
-        <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${todoStats.pct}%` as any,
-                backgroundColor:
-                  todoStats.pct === 100 ? colors.completed : colors.inProgress,
-              },
-            ]}
-          />
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.todoStatsRow}>
-          <StatCard
-            label="Total"
-            value={todoStats.total}
-            accent={colors.primary}
-            small
-          />
-          <StatCard
-            label="Done"
-            value={todoStats.completed}
-            accent={colors.completed}
-            small
-          />
-          <StatCard
-            label="Active"
-            value={todoStats.active}
-            accent={colors.inProgress}
-            small
-          />
-          <StatCard
-            label="Overdue"
-            value={todoStats.overdue}
-            accent={
-              todoStats.overdue > 0
-                ? colors.destructive
-                : colors.mutedForeground
-            }
-            small
-          />
-        </View>
-
-        {/* High priority callout */}
-        {todoStats.highPriority > 0 && (
-          <View
-            style={[
-              styles.highPriorityBanner,
-              {
-                backgroundColor: colors.destructive + "15",
-                borderColor: colors.destructive + "40",
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.highPriorityText,
-                { color: colors.destructive, fontFamily: "Inter_600SemiBold" },
-              ]}
-            >
-              ⚡ {todoStats.highPriority} high-priority task
-              {todoStats.highPriority > 1 ? "s" : ""} pending
-            </Text>
-            <Pressable onPress={() => router.push("/(tabs)/todos")}>
-              <Text
-                style={[
-                  styles.highPriorityLink,
-                  { color: colors.destructive, fontFamily: "Inter_500Medium" },
-                ]}
-              >
-                View →
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </Animated.View>
-
-      {/* ── Goals ── */}
+      {/* ── Active Goals (Compact) ── */}
       {activeGoals.length > 0 && (
-        <Animated.View entering={FadeInUp.delay(500).springify()} style={styles.section}>
+        <Animated.View entering={FadeInUp.delay(400).springify()} style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text
               style={[
@@ -421,57 +376,84 @@ export default function DashboardScreen() {
               </Text>
             </Pressable>
           </View>
-          {activeGoals.map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onPress={() => router.push("/(tabs)/goals")}
-              onIncrement={() => {
-                const newProgress = goal.currentProgress + 1;
-                updateGoal(goal.id, {
-                  currentProgress: newProgress,
-                  completed: newProgress >= goal.targetValue,
-                });
-              }}
-            />
-          ))}
+          <View
+            style={[
+              styles.listCard,
+              {
+                backgroundColor: colors.card,
+                borderRadius: colors.radius,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            {activeGoals.map((goal, i) => (
+              <CompactGoalRow
+                key={goal.id}
+                goal={goal}
+                onPress={() => router.push("/(tabs)/goals")}
+                onIncrement={() => {
+                  const newProgress = goal.currentProgress + 1;
+                  updateGoal(goal.id, {
+                    currentProgress: newProgress,
+                    completed: newProgress >= goal.targetValue,
+                  });
+                }}
+              />
+            ))}
+          </View>
         </Animated.View>
       )}
 
-      {/* ── Upcoming deadlines ── */}
-      {upcomingDeadlines.length > 0 && (
-        <Animated.View entering={FadeInUp.delay(600).springify()} style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              styles.sectionTitlePad,
-              { color: colors.foreground, fontFamily: "Inter_700Bold" },
-            ]}
-          >
-            Due This Week
-          </Text>
-          {upcomingDeadlines.map((script) => (
-            <ScriptCard
-              key={script.id}
-              script={script}
-              categories={categories}
-              onPress={() => router.push(`/script/${script.id}`)}
-              onStatusChange={(status) => updateScript(script.id, { status })}
-            />
-          ))}
-        </Animated.View>
-      )}
-      {/* ── Recent scripts ── */}
-      <Animated.View entering={FadeInUp.delay(700).springify()} style={styles.section}>
+      {/* ── Scripts Tabbed Panel (Due This Week + Recent) ── */}
+      <Animated.View entering={FadeInUp.delay(500).springify()} style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.foreground, fontFamily: "Inter_700Bold" },
-            ]}
-          >
-            Recent Scripts
-          </Text>
+          <View style={styles.tabRow}>
+            <Pressable
+              onPress={() => setScriptsTab("due")}
+              style={[
+                styles.tabBtn,
+                {
+                  backgroundColor: effectiveTab === "due" ? colors.primary + "18" : "transparent",
+                  borderColor: effectiveTab === "due" ? colors.primary + "40" : "transparent",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  {
+                    color: effectiveTab === "due" ? colors.primary : colors.mutedForeground,
+                    fontFamily: effectiveTab === "due" ? "Inter_600SemiBold" : "Inter_400Regular",
+                  },
+                ]}
+              >
+                Due This Week
+                {upcomingDeadlines.length > 0 && ` (${upcomingDeadlines.length})`}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setScriptsTab("recent")}
+              style={[
+                styles.tabBtn,
+                {
+                  backgroundColor: effectiveTab === "recent" ? colors.primary + "18" : "transparent",
+                  borderColor: effectiveTab === "recent" ? colors.primary + "40" : "transparent",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  {
+                    color: effectiveTab === "recent" ? colors.primary : colors.mutedForeground,
+                    fontFamily: effectiveTab === "recent" ? "Inter_600SemiBold" : "Inter_400Regular",
+                  },
+                ]}
+              >
+                Recent
+              </Text>
+            </Pressable>
+          </View>
           <Pressable onPress={() => router.push("/(tabs)/scripts")}>
             <Text
               style={[
@@ -483,23 +465,53 @@ export default function DashboardScreen() {
             </Text>
           </Pressable>
         </View>
-        {recentScripts.length === 0 ? (
-          <EmptyState
-            icon="file-text"
-            title="No scripts yet"
-            subtitle="Tap the Scripts tab to create your first script"
-          />
-        ) : (
-          recentScripts.map((script) => (
-            <ScriptCard
-              key={script.id}
-              script={script}
-              categories={categories}
-              onPress={() => router.push(`/script/${script.id}`)}
-              onStatusChange={(status) => updateScript(script.id, { status })}
+
+        <View
+          style={[
+            styles.listCard,
+            {
+              backgroundColor: colors.card,
+              borderRadius: colors.radius,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {effectiveTab === "due" ? (
+            upcomingDeadlines.length > 0 ? (
+              upcomingDeadlines.map((script) => (
+                <CompactScriptRow
+                  key={script.id}
+                  script={script}
+                  categories={categories}
+                  onPress={() => router.push(`/script/${script.id}`)}
+                  onStatusChange={(status) => updateScript(script.id, { status })}
+                />
+              ))
+            ) : (
+              <View style={styles.miniEmpty}>
+                <Text style={[styles.miniEmptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  No deadlines this week 🎉
+                </Text>
+              </View>
+            )
+          ) : recentScripts.length > 0 ? (
+            recentScripts.map((script) => (
+              <CompactScriptRow
+                key={script.id}
+                script={script}
+                categories={categories}
+                onPress={() => router.push(`/script/${script.id}`)}
+                onStatusChange={(status) => updateScript(script.id, { status })}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon="file-text"
+              title="No scripts yet"
+              subtitle="Tap the Scripts tab to create your first script"
             />
-          ))
-        )}
+          )}
+        </View>
       </Animated.View>
     </Animated.ScrollView>
   );
@@ -507,7 +519,7 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { gap: 16 },
+  content: { gap: 10 },
 
   // Header
   header: {
@@ -516,84 +528,135 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
   },
-  greeting: { fontSize: 13, marginBottom: 2 },
-  appName: { fontSize: 26, fontWeight: "700" },
+  greeting: { fontSize: 13, marginBottom: 1 },
+  appName: { fontSize: 24, fontWeight: "700", letterSpacing: -0.5 },
   headerBadges: {
     flexDirection: "row",
     gap: 6,
     flexWrap: "wrap",
     justifyContent: "flex-end",
   },
-  headerBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  headerBadgeText: { fontSize: 13 },
+  headerBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  headerBadgeText: { fontSize: 12 },
 
-  // KPI card shared
+  // Unified KPI card
   kpiCard: {
     marginHorizontal: 16,
-    padding: 20,
-    gap: 16,
-    borderRadius: 24,
+    padding: 14,
+    gap: 0,
+    borderRadius: 16,
     borderWidth: 1,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.05,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
       },
-      android: { elevation: 3 },
+      android: { elevation: 2 },
     }),
   },
-  kpiCardHead: {
+  kpiSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 8,
+  },
+  kpiStatsCol: {
+    flex: 1,
+    gap: 6,
+  },
+  kpiLabel: {
+    fontSize: 14,
+    letterSpacing: -0.2,
+  },
+  kpiPct: {
+    fontSize: 12,
+  },
+  kpiDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+  },
+  todoHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  kpiCardTitle: { fontSize: 18, letterSpacing: -0.3 },
-  kpiCardSub: { fontSize: 14 },
-
-  // Scripts KPI
-  kpiBody: {
+  inlineStatsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 2,
   },
-  kpiGrid: { flex: 1, gap: 8 },
-  kpiRow: { flexDirection: "row", gap: 8 },
 
-  // Todos KPI
+  // Progress bar (for to-do)
   progressTrack: {
-    height: 6,
-    borderRadius: 3,
+    height: 4,
+    borderRadius: 2,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: 3,
-    minWidth: 6,
+    borderRadius: 2,
+    minWidth: 4,
   },
-  todoStatsRow: { flexDirection: "row", gap: 8 },
-  highPriorityBanner: {
+
+  // Alert banner
+  alertBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
   },
-  highPriorityText: { fontSize: 13 },
-  highPriorityLink: { fontSize: 13 },
+  alertContent: {
+    flex: 1,
+  },
+  alertText: { fontSize: 13 },
+  alertLink: { fontSize: 13 },
 
-  section: { gap: 8, marginTop: 12 },
+  // Section shared
+  section: { gap: 6, marginTop: 4 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  sectionTitle: { fontSize: 19, fontWeight: "700", letterSpacing: -0.3 },
-  sectionTitlePad: { paddingHorizontal: 20, marginBottom: 4 },
-  seeAll: { fontSize: 15 },
+  sectionTitle: { fontSize: 17, fontWeight: "700", letterSpacing: -0.3 },
+  seeAll: { fontSize: 14 },
+
+  // Compact list card (wraps CompactScriptRow / CompactGoalRow)
+  listCard: {
+    marginHorizontal: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  // Tabs
+  tabRow: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  tabBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  tabText: {
+    fontSize: 13,
+  },
+
+  // Mini empty state
+  miniEmpty: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  miniEmptyText: {
+    fontSize: 14,
+  },
 });

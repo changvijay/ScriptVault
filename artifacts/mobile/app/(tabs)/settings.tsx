@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,9 @@ const PALETTE = [
   '#8B5CF6', '#EC4899', '#64748B', '#78716C',
 ];
 
+// Swatches light enough that a white checkmark loses contrast — use dark check instead.
+const LIGHT_SWATCHES = new Set(['#F59E0B', '#84CC16']);
+
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -37,35 +40,64 @@ export default function SettingsScreen() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const busy = exporting || importing || downloadingTemplate;
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editCat, setEditCat] = useState<Category | null>(null);
   const [catName, setCatName] = useState('');
   const [catColor, setCatColor] = useState(PALETTE[0]);
+  const [nameTouched, setNameTouched] = useState(false);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
+
+  // Sort alphabetically so a long category list is scannable instead of showing
+  // creation order, and pre-compute script counts once per render.
+  const sortedCategories = useMemo(() => {
+    return categories
+      .map(cat => ({
+        cat,
+        count: scripts.filter(s => s.categoryIds.includes(cat.id)).length,
+      }))
+      .sort((a, b) => a.cat.name.localeCompare(b.cat.name));
+  }, [categories, scripts]);
+
+  const trimmedName = catName.trim();
+  const isDuplicateName =
+    trimmedName.length > 0 &&
+    categories.some(
+      c => c.id !== editCat?.id && c.name.toLowerCase() === trimmedName.toLowerCase(),
+    );
+  const canSave = trimmedName.length > 0 && !isDuplicateName;
 
   const openCreate = () => {
     setEditCat(null);
     setCatName('');
     setCatColor(PALETTE[0]);
+    setNameTouched(false);
     setModalVisible(true);
+    Haptics.selectionAsync();
   };
 
   const openEdit = (cat: Category) => {
     setEditCat(cat);
     setCatName(cat.name);
     setCatColor(cat.color);
+    setNameTouched(false);
     setModalVisible(true);
+    Haptics.selectionAsync();
   };
 
   const handleSave = async () => {
-    if (!catName.trim()) return;
+    if (!canSave) {
+      setNameTouched(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     if (editCat) {
-      await updateCategory(editCat.id, catName.trim(), catColor);
+      await updateCategory(editCat.id, trimmedName, catColor);
     } else {
-      await createCategory(catName.trim(), catColor);
+      await createCategory(trimmedName, catColor);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setModalVisible(false);
@@ -73,9 +105,13 @@ export default function SettingsScreen() {
 
   const handleDelete = () => {
     if (!editCat) return;
+    const affected = scripts.filter(s => s.categoryIds.includes(editCat.id)).length;
+    const impactLine = affected > 0
+      ? `It will be removed from ${affected} script${affected !== 1 ? 's' : ''}. This can't be undone.`
+      : `This can't be undone.`;
     Alert.alert(
-      'Delete Category',
-      `Delete "${editCat.name}"? It will be removed from all scripts.`,
+      'Delete category?',
+      `"${editCat.name}" will be permanently deleted. ${impactLine}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -102,17 +138,22 @@ export default function SettingsScreen() {
           dialogTitle: 'Download Sample Template',
         });
       } else {
-        Alert.alert('Error', 'Sharing is not available on this device.');
+        Alert.alert('Sharing unavailable', 'This device can\u2019t share files. Try again from a supported device.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert('Template Error', e.message ?? 'Something went wrong.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Couldn\u2019t create template', e.message ?? 'Something went wrong. Please try again.');
     } finally {
       setDownloadingTemplate(false);
     }
   };
 
   const handleExport = async () => {
+    if (scripts.length === 0 && categories.length === 0 && goals.length === 0) {
+      Alert.alert('Nothing to export yet', 'Add some scripts, goals, or categories first.');
+      return;
+    }
     setExporting(true);
     try {
       const data = exportData();
@@ -124,11 +165,12 @@ export default function SettingsScreen() {
           dialogTitle: 'Export ScriptVault Data',
         });
       } else {
-        Alert.alert('Error', 'Sharing is not available on this device.');
+        Alert.alert('Sharing unavailable', 'This device can\u2019t share files. Try again from a supported device.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert('Export Failed', e.message ?? 'Something went wrong.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Export failed', e.message ?? 'Something went wrong. Please try again.');
     } finally {
       setExporting(false);
     }
@@ -153,24 +195,25 @@ export default function SettingsScreen() {
       if (!validation.valid) {
         const errorList = validation.errors.slice(0, 10).join('\n');
         const more = validation.errors.length > 10 ? `\n...and ${validation.errors.length - 10} more errors` : '';
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(
-          'Validation Failed',
-          `Found ${validation.errors.length} error(s):\n\n${errorList}${more}`,
+          `Found ${validation.errors.length} issue${validation.errors.length !== 1 ? 's' : ''}`,
+          `Fix these in your file and try again:\n\n${errorList}${more}`,
         );
         setImporting(false);
         return;
       }
 
       const { count, warnings } = validation;
-      const summary = `${count} script(s)`;
+      const summary = `${count} script${count !== 1 ? 's' : ''}`;
 
       const warningText = warnings.length > 0
-        ? `\n\nWarnings:\n${warnings.slice(0, 5).join('\n')}${warnings.length > 5 ? `\n...and ${warnings.length - 5} more` : ''}`
+        ? `\n\nHeads up:\n${warnings.slice(0, 5).join('\n')}${warnings.length > 5 ? `\n...and ${warnings.length - 5} more` : ''}`
         : '';
 
       Alert.alert(
-        'Import Scripts',
-        `Ready to import ${summary}.${warningText}\n\nThis will add the scripts alongside your existing data.`,
+        `Import ${summary}?`,
+        `These will be added alongside your existing data \u2014 nothing gets overwritten.${warningText}`,
         [
           { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
           {
@@ -179,9 +222,10 @@ export default function SettingsScreen() {
               try {
                 await importData(validation.data);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Success', `Imported ${summary} successfully!`);
+                Alert.alert('Imported', `${summary} added to your library.`);
               } catch (e: any) {
-                Alert.alert('Import Failed', e.message ?? 'Something went wrong.');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert('Import failed', e.message ?? 'Something went wrong. Please try again.');
               } finally {
                 setImporting(false);
               }
@@ -190,7 +234,8 @@ export default function SettingsScreen() {
         ],
       );
     } catch (e: any) {
-      Alert.alert('Import Failed', e.message ?? 'Could not read the file.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Import failed', e.message ?? 'Couldn\u2019t read that file. Make sure it\u2019s a .xlsx file.');
       setImporting(false);
     }
   };
@@ -218,17 +263,23 @@ export default function SettingsScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{scripts.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>Scripts</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Script{scripts.length !== 1 ? 's' : ''}
+              </Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{goals.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>Goals</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Goal{goals.length !== 1 ? 's' : ''}
+              </Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{categories.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>Categories</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Categor{categories.length !== 1 ? 'ies' : 'y'}
+              </Text>
             </View>
           </View>
         </View>
@@ -239,19 +290,22 @@ export default function SettingsScreen() {
             Import & Export
           </Text>
           <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13, marginBottom: 4 }}>
-            Export your data to Excel or import from a .xlsx file.
+            Back up your data to Excel, or bring scripts in from a .xlsx file. Importing never overwrites what you already have.
           </Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Pressable
               onPress={handleExport}
-              disabled={exporting || importing || downloadingTemplate}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Export data to Excel"
+              hitSlop={4}
               style={({ pressed }) => [
                 styles.ioBtn,
                 {
                   backgroundColor: pressed ? colors.primary + '18' : colors.muted,
                   borderColor: colors.border,
                   borderRadius: colors.radius,
-                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                  opacity: busy && !exporting ? 0.5 : 1,
                 },
               ]}
             >
@@ -261,19 +315,22 @@ export default function SettingsScreen() {
                 <Feather name="download" size={18} color={colors.primary} />
               )}
               <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                Export
+                {exporting ? 'Exporting\u2026' : 'Export'}
               </Text>
             </Pressable>
             <Pressable
               onPress={handleImport}
-              disabled={exporting || importing || downloadingTemplate}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Import data from Excel"
+              hitSlop={4}
               style={({ pressed }) => [
                 styles.ioBtn,
                 {
                   backgroundColor: pressed ? colors.primary + '18' : colors.muted,
                   borderColor: colors.border,
                   borderRadius: colors.radius,
-                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                  opacity: busy && !importing ? 0.5 : 1,
                 },
               ]}
             >
@@ -283,7 +340,7 @@ export default function SettingsScreen() {
                 <Feather name="upload" size={18} color={colors.primary} />
               )}
               <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                Import
+                {importing ? 'Importing\u2026' : 'Import'}
               </Text>
             </Pressable>
           </View>
@@ -291,18 +348,21 @@ export default function SettingsScreen() {
           {/* Sample Template */}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 }}>
             <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, marginBottom: 8 }}>
-              Download a pre-formatted template with dropdowns for Status, Categories & Goal, and date pickers for Deadline, Created & Modified.
+              New to importing? Download a ready-made template with dropdowns for Status, Categories & Goal, and date pickers for Deadline, Created & Modified.
             </Text>
             <Pressable
               onPress={handleDownloadTemplate}
-              disabled={exporting || importing || downloadingTemplate}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Download sample import template"
+              hitSlop={4}
               style={({ pressed }) => [
                 styles.ioBtn,
                 {
                   backgroundColor: pressed ? '#8B5CF6' + '18' : colors.muted,
                   borderColor: '#8B5CF6' + '40',
                   borderRadius: colors.radius,
-                  opacity: (exporting || importing || downloadingTemplate) ? 0.6 : 1,
+                  opacity: busy && !downloadingTemplate ? 0.5 : 1,
                 },
               ]}
             >
@@ -312,7 +372,7 @@ export default function SettingsScreen() {
                 <Feather name="file-text" size={18} color="#8B5CF6" />
               )}
               <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                Sample Template
+                {downloadingTemplate ? 'Preparing\u2026' : 'Sample Template'}
               </Text>
             </Pressable>
           </View>
@@ -321,12 +381,23 @@ export default function SettingsScreen() {
         {/* Categories */}
         <View style={{ gap: 12 }}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-              Categories
-            </Text>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                Categories
+              </Text>
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 }}>
+                Organize scripts by topic or type
+              </Text>
+            </View>
             <Pressable
               onPress={openCreate}
-              style={[styles.addBtn, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              accessibilityLabel="Add category"
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.addBtn,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+              ]}
             >
               <Feather name="plus" size={14} color={colors.primaryForeground} />
               <Text style={[styles.addBtnText, { color: colors.primaryForeground, fontFamily: 'Inter_500Medium' }]}>
@@ -336,39 +407,57 @@ export default function SettingsScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16, padding: 0, overflow: 'hidden' }]}>
-            {categories.length === 0 ? (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 14 }}>
+            {sortedCategories.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center', gap: 10 }}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
+                  <Feather name="tag" size={20} color={colors.mutedForeground} />
+                </View>
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
                   No categories yet
                 </Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13, textAlign: 'center' }}>
+                  Create one to start grouping your scripts
+                </Text>
+                <Pressable
+                  onPress={openCreate}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.emptyCta,
+                    { borderColor: colors.primary, opacity: pressed ? 0.7 : 1, borderRadius: colors.radius },
+                  ]}
+                >
+                  <Feather name="plus" size={14} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_500Medium', fontSize: 13 }}>
+                    Create your first category
+                  </Text>
+                </Pressable>
               </View>
             ) : (
-              categories.map((cat, idx) => {
-                const scriptCount = scripts.filter(s => s.categoryIds.includes(cat.id)).length;
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onPress={() => openEdit(cat)}
-                    style={({ pressed }) => [
-                      styles.catRow,
-                      {
-                        borderBottomColor: colors.border,
-                        borderBottomWidth: idx < categories.length - 1 ? 1 : 0,
-                        backgroundColor: pressed ? colors.muted : colors.card,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.catDot, { backgroundColor: cat.color }]} />
-                    <Text style={[styles.catName, { color: colors.foreground, fontFamily: 'Inter_500Medium' }]}>
-                      {cat.name}
-                    </Text>
-                    <Text style={[styles.catCount, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                      {scriptCount} script{scriptCount !== 1 ? 's' : ''}
-                    </Text>
-                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                  </Pressable>
-                );
-              })
+              sortedCategories.map(({ cat, count: scriptCount }, idx) => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => openEdit(cat)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${cat.name} category, ${scriptCount} script${scriptCount !== 1 ? 's' : ''}`}
+                  style={({ pressed }) => [
+                    styles.catRow,
+                    {
+                      borderBottomColor: colors.border,
+                      borderBottomWidth: idx < sortedCategories.length - 1 ? 1 : 0,
+                      backgroundColor: pressed ? colors.muted : colors.card,
+                    },
+                  ]}
+                >
+                  <View style={[styles.catDot, { backgroundColor: cat.color }]} />
+                  <Text style={[styles.catName, { color: colors.foreground, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
+                    {cat.name}
+                  </Text>
+                  <Text style={[styles.catCount, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                    {scriptCount} script{scriptCount !== 1 ? 's' : ''}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ))
             )}
           </View>
         </View>
@@ -397,31 +486,59 @@ export default function SettingsScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => setModalVisible(false)}>
+            <Pressable onPress={() => setModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}>
               <Feather name="x" size={22} color={colors.mutedForeground} />
             </Pressable>
             <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
               {editCat ? 'Edit Category' : 'New Category'}
             </Text>
-            <Pressable onPress={handleSave}>
-              <Text style={{ color: catName.trim() ? colors.primary : colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 16 }}>
+            <Pressable
+              onPress={handleSave}
+              accessibilityRole="button"
+              accessibilityLabel="Save category"
+              hitSlop={8}
+            >
+              <Text style={{ color: canSave ? colors.primary : colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 16 }}>
                 Save
               </Text>
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }}>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }} keyboardShouldPersistTaps="handled">
             {/* Name */}
             <View style={{ gap: 8 }}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Name</Text>
               <TextInput
-                style={[styles.inputField, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground, borderRadius: colors.radius, fontFamily: 'Inter_400Regular' }]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: colors.muted,
+                    borderColor: nameTouched && !canSave ? colors.destructive : colors.border,
+                    color: colors.foreground,
+                    borderRadius: colors.radius,
+                    fontFamily: 'Inter_400Regular',
+                  },
+                ]}
                 value={catName}
                 onChangeText={setCatName}
-                placeholder="Category name"
+                onBlur={() => setNameTouched(true)}
+                placeholder="e.g. Tutorials, Vlogs, Reviews"
                 placeholderTextColor={colors.mutedForeground}
                 autoFocus
+                maxLength={40}
+                returnKeyType="done"
+                onSubmitEditing={handleSave}
               />
+              {nameTouched && isDuplicateName && (
+                <Text style={{ color: colors.destructive, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                  A category named "{trimmedName}" already exists
+                </Text>
+              )}
+              {nameTouched && trimmedName.length === 0 && (
+                <Text style={{ color: colors.destructive, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                  Category name can't be empty
+                </Text>
+              )}
             </View>
 
             {/* Color */}
@@ -432,27 +549,44 @@ export default function SettingsScreen() {
                   <Pressable
                     key={c}
                     onPress={() => { setCatColor(c); Haptics.selectionAsync(); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose color ${c}`}
+                    accessibilityState={{ selected: catColor === c }}
+                    hitSlop={4}
                     style={[
                       styles.colorSwatch,
                       { backgroundColor: c },
                       catColor === c && styles.colorSwatchSelected,
                     ]}
                   >
-                    {catColor === c && <Feather name="check" size={16} color="#FFFFFF" />}
+                    {catColor === c && (
+                      <Feather name="check" size={16} color={LIGHT_SWATCHES.has(c) ? '#1F2937' : '#FFFFFF'} />
+                    )}
                   </Pressable>
                 ))}
               </View>
               {/* Preview */}
-              <View style={[styles.preview, { backgroundColor: catColor + '20', borderColor: catColor + '60', borderRadius: 20 }]}>
-                <View style={[styles.catDot, { backgroundColor: catColor }]} />
-                <Text style={{ color: catColor, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                  {catName || 'Preview'}
-                </Text>
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium', fontSize: 11 }]}>Preview</Text>
+                <View style={[styles.preview, { backgroundColor: catColor + '20', borderColor: catColor + '60', borderRadius: 20 }]}>
+                  <View style={[styles.catDot, { backgroundColor: catColor }]} />
+                  <Text style={{ color: catColor, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
+                    {trimmedName || 'Category name'}
+                  </Text>
+                </View>
               </View>
             </View>
 
             {editCat && (
-              <Pressable onPress={handleDelete} style={[styles.deleteBtn, { borderColor: colors.destructive + '60', borderRadius: colors.radius }]}>
+              <Pressable
+                onPress={handleDelete}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${editCat.name} category`}
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  { borderColor: colors.destructive + '60', borderRadius: colors.radius, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
                 <Feather name="trash-2" size={16} color={colors.destructive} />
                 <Text style={{ color: colors.destructive, fontFamily: 'Inter_500Medium', fontSize: 15 }}>Delete Category</Text>
               </Pressable>
@@ -485,8 +619,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 16,
+    minHeight: 32,
   },
   addBtnText: { fontSize: 13 },
   catRow: {
@@ -495,12 +630,29 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    minHeight: 48,
   },
   catDot: { width: 12, height: 12, borderRadius: 6 },
   catName: { flex: 1, fontSize: 15 },
   catCount: { fontSize: 13 },
   aboutText: { fontSize: 14, lineHeight: 21 },
   version: { fontSize: 12 },
+  emptyIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    marginTop: 4,
+  },
   modalContainer: { flex: 1 },
   modalHeader: {
     flexDirection: 'row',

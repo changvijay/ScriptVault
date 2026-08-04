@@ -66,6 +66,7 @@
     "exceljs": "^4.4.0",
     "expo": "~54.0.36",
     "expo-av": "^16.0.8",
+    "expo-clipboard": "^57.0.1",
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "^19.0.23",
     "expo-sharing": "~14.0.8",
