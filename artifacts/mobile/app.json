@@ -2,7 +2,7 @@
   "expo": {
     "name": "ScriptVault",
     "slug": "mobile",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
@@ -23,7 +23,7 @@
       "bundleIdentifier": "com.changitsolutions.scripttracker"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",

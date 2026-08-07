@@ -9,8 +9,9 @@ import {
   TextInput,
   Alert,
   Platform,
-  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '@/context/DataContext';
@@ -18,10 +19,69 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+
 import { Category } from '@/types';
 import { AIProvidersSettings } from '@/components/AIProvidersSettings';
 import { ContentNichesSettings } from '@/components/ContentNichesSettings';
 import { exportToExcel, validateExcelFile, generateSampleExcel } from '@/services/excelService';
+
+import { ImportExportWorkspace } from '@/components/settings/ImportExportWorkspace';
+import { CategoriesWorkspace } from '@/components/settings/CategoriesWorkspace';
+import { AboutWorkspace } from '@/components/settings/AboutWorkspace';
+
+export type WorkspaceTab = 'menu' | 'import_export' | 'categories' | 'ai_providers' | 'ai_niches' | 'about' | 'feedback';
+
+const FEEDBACK_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdH7f8Qt_fRipwKZP5B7W0Ft-T4-Fug6G-dx7eZjVUn6BNwUg/viewform?usp=publish-editor';
+
+interface WorkspaceMenuItem {
+  id: WorkspaceTab;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Feather.glyphMap;
+  isExternalLink?: boolean;
+}
+
+const WORKSPACE_ITEMS: WorkspaceMenuItem[] = [
+  {
+    id: 'import_export',
+    title: 'Import & Export',
+    subtitle: 'Manage your data backups & template.',
+    icon: 'repeat',
+  },
+  {
+    id: 'categories',
+    title: 'Categories',
+    subtitle: 'Organize your workspace.',
+    icon: 'grid',
+  },
+  {
+    id: 'ai_providers',
+    title: 'AI Providers',
+    subtitle: 'Configure external models.',
+    icon: 'cpu',
+  },
+  {
+    id: 'ai_niches',
+    title: 'AI Content Niches',
+    subtitle: 'Specialized generation scopes.',
+    icon: 'compass',
+  },
+  {
+    id: 'feedback',
+    title: 'Feedback & Support',
+    subtitle: 'Share ideas or report issues.',
+    icon: 'message-square',
+    isExternalLink: true,
+  },
+  {
+    id: 'about',
+    title: 'About & System',
+    subtitle: 'App overview, privacy, & danger zone.',
+    icon: 'info',
+  },
+];
 
 const PALETTE = [
   '#EF4444', '#F97316', '#F59E0B', '#84CC16',
@@ -29,13 +89,18 @@ const PALETTE = [
   '#8B5CF6', '#EC4899', '#64748B', '#78716C',
 ];
 
-// Swatches light enough that a white checkmark loses contrast — use dark check instead.
 const LIGHT_SWATCHES = new Set(['#F59E0B', '#84CC16']);
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+
   const { categories, scripts, goals, createCategory, updateCategory, deleteCategory, importData, exportData } = useData();
+
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceTab>(isDesktop ? 'import_export' : 'menu');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -51,8 +116,27 @@ export default function SettingsScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  // Sort alphabetically so a long category list is scannable instead of showing
-  // creation order, and pre-compute script counts once per render.
+  const handleOpenFeedback = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        window.open(FEEDBACK_URL, '_blank');
+      } else {
+        await WebBrowser.openBrowserAsync(FEEDBACK_URL);
+      }
+    } catch (_) {
+      Linking.openURL(FEEDBACK_URL);
+    }
+  };
+
+  // Filter workspace items by search query
+  const filteredWorkspaceItems = useMemo(() => {
+    if (!searchQuery.trim()) return WORKSPACE_ITEMS;
+    const q = searchQuery.toLowerCase();
+    return WORKSPACE_ITEMS.filter(
+      item => item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q),
+    );
+  }, [searchQuery]);
+
   const sortedCategories = useMemo(() => {
     return categories
       .map(cat => ({
@@ -105,21 +189,25 @@ export default function SettingsScreen() {
 
   const handleDelete = () => {
     if (!editCat) return;
-    const affected = scripts.filter(s => s.categoryIds.includes(editCat.id)).length;
+    handleDeleteCat(editCat);
+    setModalVisible(false);
+  };
+
+  const handleDeleteCat = (cat: Category) => {
+    const affected = scripts.filter(s => s.categoryIds.includes(cat.id)).length;
     const impactLine = affected > 0
       ? `It will be removed from ${affected} script${affected !== 1 ? 's' : ''}. This can't be undone.`
       : `This can't be undone.`;
     Alert.alert(
       'Delete category?',
-      `"${editCat.name}" will be permanently deleted. ${impactLine}`,
+      `"${cat.name}" will be permanently deleted. ${impactLine}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteCategory(editCat.id);
-            setModalVisible(false);
+            await deleteCategory(cat.id);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
@@ -138,12 +226,12 @@ export default function SettingsScreen() {
           dialogTitle: 'Download Sample Template',
         });
       } else {
-        Alert.alert('Sharing unavailable', 'This device can\u2019t share files. Try again from a supported device.');
+        Alert.alert('Sharing unavailable', 'This device can’t share files. Try again from a supported device.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Couldn\u2019t create template', e.message ?? 'Something went wrong. Please try again.');
+      Alert.alert('Couldn’t create template', e.message ?? 'Something went wrong. Please try again.');
     } finally {
       setDownloadingTemplate(false);
     }
@@ -165,7 +253,7 @@ export default function SettingsScreen() {
           dialogTitle: 'Export ScriptVault Data',
         });
       } else {
-        Alert.alert('Sharing unavailable', 'This device can\u2019t share files. Try again from a supported device.');
+        Alert.alert('Sharing unavailable', 'This device can’t share files. Try again from a supported device.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
@@ -213,7 +301,7 @@ export default function SettingsScreen() {
 
       Alert.alert(
         `Import ${summary}?`,
-        `These will be added alongside your existing data \u2014 nothing gets overwritten.${warningText}`,
+        `These will be added alongside your existing data — nothing gets overwritten.${warningText}`,
         [
           { text: 'Cancel', style: 'cancel', onPress: () => setImporting(false) },
           {
@@ -235,254 +323,371 @@ export default function SettingsScreen() {
       );
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Import failed', e.message ?? 'Couldn\u2019t read that file. Make sure it\u2019s a .xlsx file.');
+      Alert.alert('Import failed', e.message ?? 'Couldn’t read that file. Make sure it’s a .xlsx file.');
       setImporting(false);
+    }
+  };
+
+  const handleResetApp = async () => {
+    try {
+      await AsyncStorage.clear();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('App Reset Complete', 'All local data has been erased. Please reload the app to start fresh.');
+    } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Reset Failed', e?.message ?? 'Could not clear local storage.');
+    }
+  };
+
+  const selectWorkspace = (tab: WorkspaceTab) => {
+    if (tab === 'feedback') {
+      handleOpenFeedback();
+      return;
+    }
+    setActiveWorkspace(tab);
+    Haptics.selectionAsync();
+  };
+
+  // Title for mobile header when navigating sub-workspaces
+  const currentHeaderTitle = useMemo(() => {
+    if (isDesktop || activeWorkspace === 'menu') return 'Settings';
+    const item = WORKSPACE_ITEMS.find(i => i.id === activeWorkspace);
+    return item ? item.title : 'Settings';
+  }, [activeWorkspace, isDesktop]);
+
+  // Helper to render workspace detail content
+  const renderWorkspaceDetail = () => {
+    switch (activeWorkspace) {
+      case 'import_export':
+        return (
+          <View style={styles.workspaceSection}>
+            <View style={styles.workspaceHeaderBox}>
+              <Text style={[styles.workspaceTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                Import & Export
+              </Text>
+              <Text style={[styles.workspaceSubTitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Manage your data backups, spreadsheets, and sample templates
+              </Text>
+            </View>
+            <ImportExportWorkspace
+              onExport={handleExport}
+              onImport={handleImport}
+              onDownloadTemplate={handleDownloadTemplate}
+              exporting={exporting}
+              importing={importing}
+              downloadingTemplate={downloadingTemplate}
+              busy={busy}
+            />
+          </View>
+        );
+
+      case 'categories':
+        return (
+          <View style={styles.workspaceSection}>
+            <CategoriesWorkspace
+              sortedCategories={sortedCategories}
+              onOpenCreate={openCreate}
+              onOpenEdit={openEdit}
+              onDeleteCat={handleDeleteCat}
+            />
+          </View>
+        );
+
+      case 'ai_providers':
+        return (
+          <View style={styles.workspaceSection}>
+            <View style={styles.workspaceHeaderBox}>
+              <Text style={[styles.workspaceTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                AI Providers
+              </Text>
+              <Text style={[styles.workspaceSubTitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Configure external models and API connections
+              </Text>
+            </View>
+            <AIProvidersSettings />
+          </View>
+        );
+
+      case 'ai_niches':
+        return (
+          <View style={styles.workspaceSection}>
+            <View style={styles.workspaceHeaderBox}>
+              <Text style={[styles.workspaceTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                AI Content Niches
+              </Text>
+              <Text style={[styles.workspaceSubTitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Specialized generation scopes and audience rules
+              </Text>
+            </View>
+            <ContentNichesSettings />
+          </View>
+        );
+
+      case 'about':
+        return (
+          <View style={styles.workspaceSection}>
+            <View style={styles.workspaceHeaderBox}>
+              <Text style={[styles.workspaceTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                About & System
+              </Text>
+              <Text style={[styles.workspaceSubTitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Data overview, offline storage rules, and app maintenance
+              </Text>
+            </View>
+            <AboutWorkspace
+              scriptCount={scripts.length}
+              goalCount={goals.length}
+              categoryCount={categories.length}
+              onResetApp={handleResetApp}
+            />
+          </View>
+        );
+
+      case 'menu':
+      default:
+        return (
+          <View style={styles.menuWorkspaceContainer}>
+            <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+              WORKSPACES
+            </Text>
+            <View style={[styles.menuCardGroup, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+              {filteredWorkspaceItems.map((item, idx) => (
+                <Pressable
+                  key={item.id}
+                  onPress={() => selectWorkspace(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.title}`}
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    {
+                      borderBottomColor: colors.border,
+                      borderBottomWidth: idx < filteredWorkspaceItems.length - 1 ? 1 : 0,
+                      backgroundColor: pressed ? colors.muted : 'transparent',
+                    },
+                  ]}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: item.isExternalLink ? '#8B5CF6' + '1A' : colors.primary + '18' }]}>
+                    <Feather name={item.icon} size={18} color={item.isExternalLink ? '#8B5CF6' : colors.primary} />
+                  </View>
+                  <View style={styles.menuTextContent}>
+                    <Text style={[styles.menuTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <Feather
+                    name={item.isExternalLink ? 'external-link' : 'chevron-right'}
+                    size={18}
+                    color={item.isExternalLink ? '#8B5CF6' : colors.mutedForeground}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Quick System Summary Card */}
+            <View style={[styles.quickAboutCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
+              <View style={styles.quickAboutHeader}>
+                <Feather name="info" size={16} color={colors.primary} />
+                <Text style={[styles.quickAboutTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                  About ScriptVault
+                </Text>
+              </View>
+              <Text style={[styles.quickAboutText, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Obsidian Prime v2.4.1. Crafted for high-performance AI workflows. All local data is encrypted.
+              </Text>
+              <View style={styles.quickLinkRow}>
+                <Pressable onPress={() => selectWorkspace('about')}>
+                  <Text style={[styles.quickLink, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                    Privacy Policy
+                  </Text>
+                </Pressable>
+                <Text style={{ color: colors.mutedForeground }}>•</Text>
+                <Pressable onPress={() => selectWorkspace('about')}>
+                  <Text style={[styles.quickLink, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                    Terms of Service
+                  </Text>
+                </Pressable>
+                <Text style={{ color: colors.mutedForeground }}>•</Text>
+                <Pressable onPress={handleOpenFeedback}>
+                  <Text style={[styles.quickLink, { color: '#8B5CF6', fontFamily: 'Inter_500Medium' }]}>
+                    Feedback Form
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        );
     }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: topInset + 12,
-          paddingBottom: bottomInset + 100,
-          gap: 24,
-        }}
-        showsVerticalScrollIndicator={false}
+      {/* Top Main Navigation Header */}
+      <View
+        style={[
+          styles.mainHeader,
+          {
+            paddingTop: topInset + 12,
+            borderBottomColor: colors.border,
+            borderBottomWidth: activeWorkspace !== 'menu' && !isDesktop ? 1 : 0,
+          },
+        ]}
       >
-        {/* Header */}
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Inter_700Bold', paddingHorizontal: 20 }]}>
-          Settings
-        </Text>
-
-        {/* Stats overview */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-            Data Overview
-          </Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{scripts.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                Script{scripts.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{goals.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                Goal{goals.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statNum, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{categories.length}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                Categor{categories.length !== 1 ? 'ies' : 'y'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Import & Export */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-            Import & Export
-          </Text>
-          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13, marginBottom: 4 }}>
-            Back up your data to Excel, or bring scripts in from a .xlsx file. Importing never overwrites what you already have.
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={styles.headerTitleRow}>
+          {activeWorkspace !== 'menu' && !isDesktop ? (
             <Pressable
-              onPress={handleExport}
-              disabled={busy}
+              onPress={() => selectWorkspace('menu')}
               accessibilityRole="button"
-              accessibilityLabel="Export data to Excel"
-              hitSlop={4}
+              accessibilityLabel="Back to Settings menu"
+              hitSlop={8}
               style={({ pressed }) => [
-                styles.ioBtn,
-                {
-                  backgroundColor: pressed ? colors.primary + '18' : colors.muted,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
-                  opacity: busy && !exporting ? 0.5 : 1,
-                },
+                styles.backBtn,
+                { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1, borderRadius: colors.radius },
               ]}
             >
-              {exporting ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Feather name="download" size={18} color={colors.primary} />
-              )}
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                {exporting ? 'Exporting\u2026' : 'Export'}
-              </Text>
+              <Feather name="arrow-left" size={20} color={colors.foreground} />
             </Pressable>
-            <Pressable
-              onPress={handleImport}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Import data from Excel"
-              hitSlop={4}
-              style={({ pressed }) => [
-                styles.ioBtn,
-                {
-                  backgroundColor: pressed ? colors.primary + '18' : colors.muted,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
-                  opacity: busy && !importing ? 0.5 : 1,
-                },
-              ]}
-            >
-              {importing ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Feather name="upload" size={18} color={colors.primary} />
-              )}
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                {importing ? 'Importing\u2026' : 'Import'}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Sample Template */}
-          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 }}>
-            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, marginBottom: 8 }}>
-              New to importing? Download a ready-made template with dropdowns for Status, Categories & Goal, and date pickers for Deadline, Created & Modified.
-            </Text>
-            <Pressable
-              onPress={handleDownloadTemplate}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Download sample import template"
-              hitSlop={4}
-              style={({ pressed }) => [
-                styles.ioBtn,
-                {
-                  backgroundColor: pressed ? '#8B5CF6' + '18' : colors.muted,
-                  borderColor: '#8B5CF6' + '40',
-                  borderRadius: colors.radius,
-                  opacity: busy && !downloadingTemplate ? 0.5 : 1,
-                },
-              ]}
-            >
-              {downloadingTemplate ? (
-                <ActivityIndicator size="small" color="#8B5CF6" />
-              ) : (
-                <Feather name="file-text" size={18} color="#8B5CF6" />
-              )}
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                {downloadingTemplate ? 'Preparing\u2026' : 'Sample Template'}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Categories */}
-        <View style={{ gap: 12 }}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-                Categories
-              </Text>
-              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 }}>
-                Organize scripts by topic or type
-              </Text>
+          ) : (
+            <View style={[styles.headerGearCircle, { backgroundColor: colors.primary + '18' }]}>
+              <Feather name="sliders" size={20} color={colors.primary} />
             </View>
+          )}
+
+          <Text style={[styles.pageTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold', flex: 1 }]} numberOfLines={1}>
+            {currentHeaderTitle}
+          </Text>
+
+          {/* Top Header "+ Add" action when viewing Categories workspace on mobile */}
+          {activeWorkspace === 'categories' && !isDesktop && (
             <Pressable
               onPress={openCreate}
               accessibilityRole="button"
               accessibilityLabel="Add category"
               hitSlop={6}
               style={({ pressed }) => [
-                styles.addBtn,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+                styles.headerAddBtn,
+                { backgroundColor: '#F59E0B', opacity: pressed ? 0.8 : 1 },
               ]}
             >
-              <Feather name="plus" size={14} color={colors.primaryForeground} />
-              <Text style={[styles.addBtnText, { color: colors.primaryForeground, fontFamily: 'Inter_500Medium' }]}>
+              <Feather name="plus" size={14} color="#0F172A" />
+              <Text style={{ color: '#0F172A', fontFamily: 'Inter_700Bold', fontSize: 13 }}>
                 Add
               </Text>
             </Pressable>
-          </View>
+          )}
+        </View>
 
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16, padding: 0, overflow: 'hidden' }]}>
-            {sortedCategories.length === 0 ? (
-              <View style={{ padding: 24, alignItems: 'center', gap: 10 }}>
-                <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
-                  <Feather name="tag" size={20} color={colors.mutedForeground} />
-                </View>
-                <Text style={{ color: colors.foreground, fontFamily: 'Inter_500Medium', fontSize: 14 }}>
-                  No categories yet
-                </Text>
-                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13, textAlign: 'center' }}>
-                  Create one to start grouping your scripts
-                </Text>
+        {/* Global Settings Search Bar */}
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: colors.muted,
+              borderColor: colors.border,
+              borderRadius: colors.radius,
+            },
+          ]}
+        >
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.foreground, fontFamily: 'Inter_400Regular' }]}
+            placeholder="Search settings..."
+            placeholderTextColor={colors.mutedForeground}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={6}>
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Body Content Layout */}
+      {isDesktop ? (
+        // Desktop / Tablet Split Sidebar Workspace View
+        <View style={styles.desktopLayout}>
+          {/* Left Sidebar Menu */}
+          <View style={[styles.sidebar, { borderRightColor: colors.border, borderRightWidth: 1 }]}>
+            <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+              WORKSPACES
+            </Text>
+            {filteredWorkspaceItems.map(item => {
+              const isActive = activeWorkspace === item.id;
+              return (
                 <Pressable
-                  onPress={openCreate}
+                  key={item.id}
+                  onPress={() => selectWorkspace(item.id)}
                   accessibilityRole="button"
+                  accessibilityLabel={`Select ${item.title} workspace`}
                   style={({ pressed }) => [
-                    styles.emptyCta,
-                    { borderColor: colors.primary, opacity: pressed ? 0.7 : 1, borderRadius: colors.radius },
-                  ]}
-                >
-                  <Feather name="plus" size={14} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontFamily: 'Inter_500Medium', fontSize: 13 }}>
-                    Create your first category
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              sortedCategories.map(({ cat, count: scriptCount }, idx) => (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => openEdit(cat)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${cat.name} category, ${scriptCount} script${scriptCount !== 1 ? 's' : ''}`}
-                  style={({ pressed }) => [
-                    styles.catRow,
+                    styles.sidebarItem,
                     {
-                      borderBottomColor: colors.border,
-                      borderBottomWidth: idx < sortedCategories.length - 1 ? 1 : 0,
-                      backgroundColor: pressed ? colors.muted : colors.card,
+                      backgroundColor: isActive
+                        ? colors.primary + '20'
+                        : pressed
+                        ? colors.muted
+                        : 'transparent',
+                      borderColor: isActive ? colors.primary + '50' : 'transparent',
+                      borderRadius: colors.radius,
                     },
                   ]}
                 >
-                  <View style={[styles.catDot, { backgroundColor: cat.color }]} />
-                  <Text style={[styles.catName, { color: colors.foreground, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
-                    {cat.name}
+                  <Feather
+                    name={item.icon}
+                    size={18}
+                    color={item.isExternalLink ? '#8B5CF6' : isActive ? colors.primary : colors.mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.sidebarItemTitle,
+                      {
+                        color: item.isExternalLink ? '#8B5CF6' : isActive ? colors.foreground : colors.mutedForeground,
+                        fontFamily: isActive ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                        flex: 1,
+                      },
+                    ]}
+                  >
+                    {item.title}
                   </Text>
-                  <Text style={[styles.catCount, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                    {scriptCount} script{scriptCount !== 1 ? 's' : ''}
-                  </Text>
-                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  {item.isExternalLink && (
+                    <Feather name="external-link" size={14} color="#8B5CF6" />
+                  )}
                 </Pressable>
-              ))
-            )}
+              );
+            })}
           </View>
+
+          {/* Right Workspace Main Detail Content */}
+          <ScrollView
+            style={styles.desktopContentArea}
+            contentContainerStyle={{
+              padding: 24,
+              paddingBottom: bottomInset + 80,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderWorkspaceDetail()}
+          </ScrollView>
         </View>
+      ) : (
+        // Mobile Stack Scroll View
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: bottomInset + 100,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderWorkspaceDetail()}
+        </ScrollView>
+      )}
 
-        {/* AI Providers */}
-        <AIProvidersSettings />
-
-        {/* Content Niches */}
-        <ContentNichesSettings />
-
-        {/* About */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, marginHorizontal: 16 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
-            About
-          </Text>
-          <Text style={[styles.aboutText, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-            ScriptVault is a fully offline script and note management app. All your data is stored locally on your device — no cloud, no sync, no accounts needed.
-          </Text>
-          <Text style={[styles.version, { color: colors.mutedForeground + '80', fontFamily: 'Inter_400Regular' }]}>
-            Version 1.0.0
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Category Modal */}
+      {/* Category Creation / Editing Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
@@ -505,7 +710,7 @@ export default function SettingsScreen() {
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }} keyboardShouldPersistTaps="handled">
-            {/* Name */}
+            {/* Category Name Input */}
             <View style={{ gap: 8 }}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Name</Text>
               <TextInput
@@ -522,7 +727,7 @@ export default function SettingsScreen() {
                 value={catName}
                 onChangeText={setCatName}
                 onBlur={() => setNameTouched(true)}
-                placeholder="e.g. Tutorials, Vlogs, Reviews"
+                placeholder="e.g. Tutorials, Vlogs, Tech Startups"
                 placeholderTextColor={colors.mutedForeground}
                 autoFocus
                 maxLength={40}
@@ -541,7 +746,7 @@ export default function SettingsScreen() {
               )}
             </View>
 
-            {/* Color */}
+            {/* Color Selector Swatches */}
             <View style={{ gap: 12 }}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }]}>Color</Text>
               <View style={styles.colorGrid}>
@@ -599,61 +804,161 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '700' },
-  sectionHeader: {
+  container: {
+    flex: 1,
+  },
+  mainHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    gap: 14,
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    gap: 12,
   },
-  sectionTitle: { fontSize: 17, fontWeight: '600' },
-  card: { padding: 16, borderWidth: 1, gap: 12 },
-  statsRow: { flexDirection: 'row', alignItems: 'center' },
-  statItem: { flex: 1, alignItems: 'center', paddingVertical: 4 },
-  statNum: { fontSize: 28, fontWeight: '700' },
-  statLabel: { fontSize: 12 },
-  divider: { width: 1, height: 40 },
-  addBtn: {
+  headerGearCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+  },
+  headerAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 16,
-    minHeight: 32,
   },
-  addBtnText: { fontSize: 13 },
-  catRow: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 48,
-  },
-  catDot: { width: 12, height: 12, borderRadius: 6 },
-  catName: { flex: 1, fontSize: 15 },
-  catCount: { fontSize: 13 },
-  aboutText: { fontSize: 14, lineHeight: 21 },
-  version: { fontSize: 12 },
-  emptyIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    marginTop: 4,
   },
-  modalContainer: { flex: 1 },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
+  },
+  menuWorkspaceContainer: {
+    gap: 16,
+  },
+  menuSectionHeader: {
+    fontSize: 11,
+    letterSpacing: 1,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  menuCardGroup: {
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 14,
+  },
+  menuIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTextContent: {
+    flex: 1,
+    gap: 3,
+  },
+  menuTitle: {
+    fontSize: 16,
+  },
+  menuSubtitle: {
+    fontSize: 13,
+  },
+  quickAboutCard: {
+    padding: 18,
+    borderWidth: 1,
+    gap: 10,
+    marginTop: 8,
+  },
+  quickAboutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickAboutTitle: {
+    fontSize: 15,
+  },
+  quickAboutText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  quickLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  quickLink: {
+    fontSize: 13,
+  },
+  workspaceSection: {
+    gap: 20,
+  },
+  workspaceHeaderBox: {
+    gap: 4,
+  },
+  workspaceTitle: {
+    fontSize: 24,
+  },
+  workspaceSubTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  desktopLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebar: {
+    width: 280,
+    padding: 16,
+    gap: 6,
+  },
+  sidebarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+  },
+  sidebarItemTitle: {
+    fontSize: 14,
+  },
+  desktopContentArea: {
+    flex: 1,
+  },
+  modalContainer: {
+    flex: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -662,8 +967,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700' },
-  fieldLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  modalTitle: {
+    fontSize: 18,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   inputField: {
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -700,16 +1011,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderWidth: 1,
+  catDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  ioBtn: {
-    flex: 1,
+  deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
