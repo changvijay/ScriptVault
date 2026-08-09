@@ -162,9 +162,6 @@ export default function ScriptsScreen() {
           if (!selectionMode) enterSelectionMode(item.id);
           else toggleSelect(item.id);
         }}
-        accessibilityRole="button"
-        accessibilityLabel={item.title}
-        accessibilityState={{ selected: selectedIds.has(item.id) }}
       />
     ),
     [categories, selectionMode, selectedIds, toggleSelect, enterSelectionMode],
@@ -399,7 +396,7 @@ export default function ScriptsScreen() {
       </Modal>
 
       {/* ── List ── */}
-      <FlatList
+      <Animated.FlatList
         data={paged}
         keyExtractor={s => s.id}
         renderItem={renderItem}

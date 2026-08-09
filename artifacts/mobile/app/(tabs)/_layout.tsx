@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -35,10 +35,10 @@ function NativeTabLayout() {
   );
 }
 
+import { useTheme } from '@/context/ThemeContext';
+
 function ClassicTabLayout() {
-  const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { colors, isDark } = useTheme();
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
 
@@ -63,11 +63,9 @@ function ClassicTabLayout() {
               tint={isDark ? 'dark' : 'light'}
               style={StyleSheet.absoluteFill}
             />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
+        sceneStyle: { backgroundColor: colors.background },
       }}
-      sceneContainerStyle={{ backgroundColor: colors.background }}
     >
       <Tabs.Screen
         name="index"

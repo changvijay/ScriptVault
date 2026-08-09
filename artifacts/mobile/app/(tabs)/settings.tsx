@@ -30,8 +30,9 @@ import { exportToExcel, validateExcelFile, generateSampleExcel } from '@/service
 import { ImportExportWorkspace } from '@/components/settings/ImportExportWorkspace';
 import { CategoriesWorkspace } from '@/components/settings/CategoriesWorkspace';
 import { AboutWorkspace } from '@/components/settings/AboutWorkspace';
+import { DarkModeDropdown } from '@/components/DarkModeDropdown';
 
-export type WorkspaceTab = 'menu' | 'import_export' | 'categories' | 'ai_providers' | 'ai_niches' | 'about' | 'feedback';
+export type WorkspaceTab = 'menu' | 'appearance' | 'import_export' | 'categories' | 'ai_providers' | 'ai_niches' | 'about' | 'feedback';
 
 const FEEDBACK_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdH7f8Qt_fRipwKZP5B7W0Ft-T4-Fug6G-dx7eZjVUn6BNwUg/viewform?usp=publish-editor';
 
@@ -44,6 +45,12 @@ interface WorkspaceMenuItem {
 }
 
 const WORKSPACE_ITEMS: WorkspaceMenuItem[] = [
+  {
+    id: 'appearance',
+    title: 'Appearance & Theme',
+    subtitle: 'Dark mode, light mode, & system theme.',
+    icon: 'moon',
+  },
   {
     id: 'import_export',
     title: 'Import & Export',
@@ -358,6 +365,21 @@ export default function SettingsScreen() {
   // Helper to render workspace detail content
   const renderWorkspaceDetail = () => {
     switch (activeWorkspace) {
+      case 'appearance':
+        return (
+          <View style={styles.workspaceSection}>
+            <View style={styles.workspaceHeaderBox}>
+              <Text style={[styles.workspaceTitle, { color: colors.foreground, fontFamily: 'Inter_700Bold' }]}>
+                Appearance & Theme
+              </Text>
+              <Text style={[styles.workspaceSubTitle, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                Customize application theme mode and dark mode preferences
+              </Text>
+            </View>
+            <DarkModeDropdown variant="card" />
+          </View>
+        );
+
       case 'import_export':
         return (
           <View style={styles.workspaceSection}>
@@ -447,7 +469,13 @@ export default function SettingsScreen() {
       default:
         return (
           <View style={styles.menuWorkspaceContainer}>
+            {/* Appearance & Theme section directly on main settings page */}
             <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+              APPEARANCE & THEME
+            </Text>
+            <DarkModeDropdown variant="card" />
+
+            <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', marginTop: 12 }]}>
               WORKSPACES
             </Text>
             <View style={[styles.menuCardGroup, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
@@ -559,6 +587,9 @@ export default function SettingsScreen() {
             {currentHeaderTitle}
           </Text>
 
+          {/* Top Header Dark Mode Switcher Dropdown */}
+          <DarkModeDropdown variant="dropdown" showLabel={isDesktop} />
+
           {/* Top Header "+ Add" action when viewing Categories workspace on mobile */}
           {activeWorkspace === 'categories' && !isDesktop && (
             <Pressable
@@ -612,6 +643,13 @@ export default function SettingsScreen() {
         <View style={styles.desktopLayout}>
           {/* Left Sidebar Menu */}
           <View style={[styles.sidebar, { borderRightColor: colors.border, borderRightWidth: 1 }]}>
+            <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+              THEME
+            </Text>
+            <View style={{ marginBottom: 16 }}>
+              <DarkModeDropdown variant="segmented" />
+            </View>
+
             <Text style={[styles.menuSectionHeader, { color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
               WORKSPACES
             </Text>

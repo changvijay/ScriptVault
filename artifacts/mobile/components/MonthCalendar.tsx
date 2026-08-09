@@ -557,7 +557,7 @@ function DayModal({
           <Pressable
             onPress={() => {
               onClose();
-              setTimeout(() => router.push({ pathname: '/script/new', params: { prefillDate: dateStr } }), 220);
+              setTimeout(() => router.push({ pathname: '/script/new' as any, params: { prefillDate: dateStr } }), 220);
             }}
             accessibilityRole="button"
             style={({ pressed }) => [

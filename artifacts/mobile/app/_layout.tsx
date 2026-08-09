@@ -13,6 +13,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { ThemeProvider } from '@/context/ThemeContext';
 import { DataProvider } from '@/context/DataContext';
 import { AIProvider } from '@/context/AIContext';
 
@@ -57,11 +58,13 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <DataProvider>
-                <AIProvider>
-                  <RootLayoutNav />
-                </AIProvider>
-              </DataProvider>
+              <ThemeProvider>
+                <DataProvider>
+                  <AIProvider>
+                    <RootLayoutNav />
+                  </AIProvider>
+                </DataProvider>
+              </ThemeProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

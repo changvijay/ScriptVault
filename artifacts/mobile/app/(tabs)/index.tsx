@@ -16,6 +16,7 @@ import { CompactScriptRow } from "@/components/CompactScriptRow";
 import { CompactGoalRow } from "@/components/CompactGoalRow";
 import { EmptyState } from "@/components/EmptyState";
 import { MonthCalendar } from "@/components/MonthCalendar";
+import { DarkModeDropdown } from "@/components/DarkModeDropdown";
 import { router } from "expo-router";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -161,6 +162,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
         <View style={styles.headerBadges}>
+          <DarkModeDropdown variant="dropdown" showLabel={false} />
           <View
             style={[
               styles.headerBadge,
