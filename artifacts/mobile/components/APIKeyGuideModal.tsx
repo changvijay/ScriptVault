@@ -9,11 +9,12 @@ import {
   Animated,
   Linking,
   Easing,
+  Platform,
+  Share,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
-import * as Clipboard from 'expo-clipboard';
 import { AIProviderKey } from '@/services/ai/types';
 
 interface GuideStep {
@@ -259,11 +260,70 @@ export function APIKeyGuideModal({
   };
 
   const handleCopy = async () => {
-    await Clipboard.setStringAsync(currentGuide.displayUrl);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setCopied(true);
-    if (copyTimeout.current) clearTimeout(copyTimeout.current);
-    copyTimeout.current = setTimeout(() => setCopied(false), 1800);
+    let success = false;
+
+    // 1. Web platform: use Web Clipboard API or document.execCommand
+    if (Platform.OS === 'web') {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(currentGuide.displayUrl);
+          success = true;
+        } catch (_) {}
+      }
+
+      if (!success && typeof document !== 'undefined') {
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = currentGuide.displayUrl;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          success = document.execCommand('copy');
+          document.body.removeChild(textArea);
+        } catch (_) {}
+      }
+    } else {
+      // 2. Native iOS & Android: Check if ExpoClipboard native module is loaded in native runtime
+      const isNativeExpoClipboardAvailable = !!(
+        (globalThis as any)?.expo?.modules?.ExpoClipboard ||
+        (globalThis as any)?.expo?.modules?.ExpoClipboardModule ||
+        (require('react-native')?.NativeModulesProxy?.ExpoClipboard) ||
+        (require('react-native')?.NativeModules?.ExpoClipboard)
+      );
+
+      if (isNativeExpoClipboardAvailable) {
+        try {
+          const Clipboard = require('expo-clipboard');
+          if (Clipboard && typeof Clipboard.setStringAsync === 'function') {
+            await Clipboard.setStringAsync(currentGuide.displayUrl);
+            success = true;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Fallback for iOS/Android when expo-clipboard native library is not compiled into runtime
+      if (!success) {
+        try {
+          await Share.share({
+            title: currentGuide.name,
+            message: currentGuide.url,
+            url: currentGuide.url,
+          });
+          success = true;
+        } catch (_) {}
+      }
+    }
+
+    if (success) {
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (_) {}
+      setCopied(true);
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+      copyTimeout.current = setTimeout(() => setCopied(false), 1800);
+    }
   };
 
   const handleOpenLink = async () => {
