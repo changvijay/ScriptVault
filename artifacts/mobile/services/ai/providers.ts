@@ -1,17 +1,16 @@
 import { AIProvider, AIProviderKey, AIProviderMeta } from './types';
 
 // ── Provider metadata ────────────────────────────────────────────────────────
-
 const PROVIDER_META: Record<AIProviderKey, AIProviderMeta> = {
   groq: {
     key: 'groq',
     displayName: 'Groq',
     color: '#00A67E',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'openai/gpt-oss-120b',
     models: [
-      { id: 'llama-3.3-70b-versatile', label: 'LLaMA 3.3 70B' },
-      { id: 'llama3-8b-8192', label: 'LLaMA 3 8B' },
-      { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B' },
+      { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
+      { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B' },
     ],
   },
   openrouter: {
@@ -41,15 +40,14 @@ const PROVIDER_META: Record<AIProviderKey, AIProviderMeta> = {
     key: 'claude',
     displayName: 'Anthropic Claude',
     color: '#D97706',
-    defaultModel: 'claude-3-5-haiku-20241022',
+    defaultModel: 'claude-haiku-4-5-20251001',
     models: [
-      { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-      { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-      { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+      { id: 'claude-opus-5', label: 'Claude Opus 5' },
     ],
   },
 };
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function throwIfNotOk(res: Response): Promise<void> {
