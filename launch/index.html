@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScriptVault — Launch</title>
+<meta name="description" content="ScriptVault by Chang IT Solution. The private home for every script you write.">
+<style>
+:root{
+  --bg:#fbfbfd;
+  --paper:#ffffff;
+  --soft:#f5f5f7;
+  --ink:#1d1d1f;
+  --mute:#6e6e73;
+  --dim:#b4b4ba;
+  --line:rgba(0,0,0,.09);
+  --amber:#d97706;
+  --amber-2:#f59e0b;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+body{background:var(--bg);overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+
+/* ---------- STAGE ---------- */
+.film{position:relative;height:100vh;height:100svh;min-height:540px;overflow:hidden;
+  background:radial-gradient(ellipse 75% 60% at 50% 42%,#ffffff 0%,#f6f6f8 55%,#ececf0 100%)}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.035;z-index:5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;
+  opacity:0;visibility:hidden;transform:scale(1.07);filter:blur(16px);
+  transition:opacity 1.1s var(--ease-io),transform 1.5s var(--ease),filter 1.1s var(--ease-io),visibility 0s 1.2s}
+.scene.on{opacity:1;visibility:visible;transform:scale(1);filter:blur(0);transition-delay:.2s,.2s,.2s,0s}
+.scene.out{opacity:0;visibility:visible;transform:scale(.95);filter:blur(12px);transition-delay:0s}
+
+.paused *{animation-play-state:paused!important}
+
+.eyebrow{font-size:clamp(11px,1.05vw,13px);letter-spacing:.42em;text-transform:uppercase;color:var(--mute);font-weight:500}
+.h1{font-size:clamp(36px,6.6vw,96px);font-weight:600;letter-spacing:-.045em;line-height:1.03}
+.h2{font-size:clamp(28px,4.6vw,64px);font-weight:600;letter-spacing:-.038em;line-height:1.07}
+.sub{font-size:clamp(15px,1.6vw,21px);color:var(--mute);font-weight:400;letter-spacing:-.012em;line-height:1.45;max-width:30em}
+.dim{color:var(--dim)}
+.grad{background:linear-gradient(180deg,#1d1d1f 30%,#6e6e73 115%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.gold{background:linear-gradient(100deg,#b45309,#f59e0b 55%,#b45309);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+.r{opacity:0;transform:translateY(24px);filter:blur(8px)}
+.on .r{animation:rise 1.5s var(--ease) both;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:none;filter:blur(0)}}
+
+/* ---------- S1 brand ---------- */
+.s1 .mark{width:1px;height:0;background:linear-gradient(transparent,var(--amber));margin-bottom:34px}
+.on.s1 .mark{animation:grow 1.8s var(--ease) .2s both}
+@keyframes grow{to{height:76px}}
+.s1 .eyebrow{font-size:clamp(12px,1.4vw,16px);color:var(--ink)}
+
+/* ---------- S2 problem ---------- */
+.s2 .h1 span{display:block}
+
+/* ---------- icon ---------- */
+.icon-wrap{position:relative;width:min(44vh,360px);aspect-ratio:1;margin-bottom:4.5vh}
+.icon-wrap::before{content:"";position:absolute;inset:-40%;background:radial-gradient(circle,rgba(245,158,11,.16),transparent 60%);opacity:0}
+.on .icon-wrap::before{animation:fadein 3s var(--ease) .5s both}
+@keyframes fadein{to{opacity:1}}
+.icon-wrap img{position:relative;width:100%;height:100%;border-radius:22.5%;display:block;
+  box-shadow:0 2px 4px rgba(0,0,0,.06),0 30px 60px -10px rgba(0,0,0,.28),0 60px 120px -20px rgba(0,0,0,.22)}
+.on .icon-wrap{animation:icon-in 3.4s var(--ease) both}
+@keyframes icon-in{from{transform:scale(.5) translateY(50px);opacity:0;filter:blur(20px)}to{transform:none;opacity:1;filter:blur(0)}}
+.s3 .h1{font-size:clamp(42px,7.4vw,108px)}
+
+/* ---------- S4 dial ---------- */
+.dial-frame{position:relative;width:min(80vh,92vw,720px);aspect-ratio:1;border-radius:50%;overflow:hidden;margin-top:-8vh;
+  -webkit-mask-image:radial-gradient(circle,#000 44%,transparent 68%);mask-image:radial-gradient(circle,#000 44%,transparent 68%)}
+.dial-frame img{position:absolute;inset:0;width:100%;height:100%;transform-origin:51% 59%}
+.on .dial-frame img{animation:dial-zoom 8.6s var(--ease-io) both}
+@keyframes dial-zoom{0%{transform:scale(1) rotate(0)}100%{transform:scale(3.1) rotate(-4deg)}}
+.s4 .cap{position:absolute;bottom:10vh;left:0;right:0;padding:0 24px}
+
+/* ---------- S5 phone (app light theme) ---------- */
+.phone{position:relative;width:min(31vh,256px);aspect-ratio:9/19.3;border-radius:40px;background:#f7f6f3;
+  box-shadow:0 0 0 7px #111,0 0 0 8px #3a3a3c,0 50px 100px -20px rgba(0,0,0,.35),0 30px 60px -30px rgba(0,0,0,.3);
+  padding:36px 15px 15px;text-align:left;overflow:hidden}
+.phone::before{content:"";position:absolute;top:10px;left:50%;width:32%;height:15px;border-radius:9px;background:#111;transform:translateX(-50%)}
+.on .phone{animation:phone-in 5.6s var(--ease) both}
+@keyframes phone-in{from{transform:translateY(70px) scale(.9);opacity:0}to{transform:translateY(0) scale(1.06);opacity:1}}
+.p-title{font-size:16px;font-weight:700;letter-spacing:-.025em;margin-bottom:12px;color:#1a1a1a}
+.p-card{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:9px;border:1px solid #e5e1d8}
+.p-card b{display:block;font-size:11.5px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px;color:#1a1a1a}
+.p-card i{display:block;height:4px;border-radius:2px;background:#ede9e0;margin-bottom:4px}
+.p-card i:nth-child(3){width:60%}
+.tag{display:inline-block;font-size:8.5px;padding:2px 7px;border-radius:9px;margin-top:5px;font-style:normal;font-weight:600}
+.t-prog{background:#dbeafe;color:#2563eb}.t-done{background:#dcfce7;color:#16a34a}.t-new{background:#ede9e0;color:#6b6558}
+.on .p-card{opacity:0;animation:rise 1.2s var(--ease) both;animation-delay:calc(1s + var(--i)*.45s)}
+
+/* ---------- S6 voice ---------- */
+.wave{display:flex;align-items:center;gap:6px;height:130px;margin-bottom:5vh}
+.wave span{width:4px;border-radius:3px;background:linear-gradient(var(--amber-2),var(--amber));height:10px}
+.on .wave span{animation:bar 1.5s ease-in-out infinite;animation-delay:calc(var(--k)*-.11s)}
+@keyframes bar{0%,100%{height:8px}50%{height:var(--h,80px)}}
+
+/* ---------- S7 ai ---------- */
+.ai-list{display:flex;flex-direction:column;gap:clamp(6px,1.4vh,16px);align-items:center}
+.ai-list div{font-size:clamp(28px,4.6vw,62px);font-weight:600;letter-spacing:-.04em;color:var(--dim);opacity:0}
+.on .ai-list div{animation:hi 2.4s var(--ease) both;animation-delay:var(--t)}
+@keyframes hi{0%{opacity:0;transform:translateY(16px);filter:blur(6px);color:var(--ink)}25%{opacity:1;transform:none;filter:blur(0);color:var(--ink)}60%{color:var(--ink)}100%{opacity:1;color:#c9c9ce}}
+.models{display:flex;gap:clamp(14px,3vw,40px);margin-top:5vh;flex-wrap:wrap;justify-content:center}
+.models span{font-size:clamp(11px,1.05vw,13px);letter-spacing:.3em;text-transform:uppercase;color:var(--mute)}
+
+/* ---------- S8 goals ---------- */
+.ring{position:relative;width:min(34vh,290px);aspect-ratio:1;margin-bottom:4.5vh}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+.ring circle{fill:none;stroke-width:5;stroke-linecap:round}
+.ring .bg{stroke:rgba(0,0,0,.06)}
+.ring .fg{stroke:url(#rg);stroke-dasharray:565;stroke-dashoffset:565;filter:drop-shadow(0 4px 10px rgba(217,119,6,.3))}
+.on .ring .fg{animation:fill 3.6s var(--ease-io) .5s both}
+@keyframes fill{to{stroke-dashoffset:124}}
+.ring .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(50px,9vh,84px);font-weight:600;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.ring .num small{font-size:.34em;color:var(--mute);margin-left:3px;font-weight:500}
+
+/* ---------- S9 finale ---------- */
+.s9 .icon-wrap{width:min(20vh,140px);margin-bottom:4.5vh}
+.s9 .btn{margin-top:4.5vh}
+
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 30px;border-radius:980px;background:var(--ink);color:#fff;font-weight:500;font-size:15px;letter-spacing:-.01em;border:0;cursor:pointer;transition:transform .5s var(--ease),background .3s}
+.btn:hover{transform:scale(1.04);background:#000}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.btn.ghost:hover{background:rgba(0,0,0,.04)}
+.btn svg{width:12px;height:12px;fill:currentColor}
+
+/* ---------- GATE ---------- */
+.gate{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;
+  background:radial-gradient(ellipse 75% 60% at 50% 42%,#fff 0%,#f6f6f8 55%,#ececf0 100%);transition:opacity 1s var(--ease-io),visibility 0s 1s}
+.gate.hide{opacity:0;visibility:hidden}
+.gate img{width:96px;height:96px;border-radius:22.5%;box-shadow:0 20px 40px -10px rgba(0,0,0,.3);margin-bottom:28px}
+.gate .h2{margin:10px 0 12px}
+.gate .btn{margin-top:30px}
+.gate .hint{margin-top:18px;font-size:12px;color:var(--mute);letter-spacing:.02em}
+.gate > *{animation:rise 1.4s var(--ease) both}
+.gate > :nth-child(2){animation-delay:.12s}.gate > :nth-child(3){animation-delay:.24s}.gate > :nth-child(4){animation-delay:.36s}.gate > :nth-child(5){animation-delay:.48s}.gate > :nth-child(6){animation-delay:.6s}
+
+/* ---------- HUD ---------- */
+.hud{position:absolute;left:0;right:0;bottom:0;z-index:10;padding:0 clamp(16px,4vw,48px) clamp(16px,3vh,30px);display:flex;align-items:center;gap:20px;opacity:0;transition:opacity .8s}
+.started .hud{opacity:1}
+.bars{flex:1;display:flex;gap:6px}
+.bars button{flex:1;height:22px;background:none;border:0;cursor:pointer;position:relative}
+.bars button::before,.bars button i{content:"";position:absolute;left:0;right:0;top:10px;height:2px;border-radius:2px}
+.bars button::before{background:rgba(0,0,0,.1)}
+.bars button i{background:var(--ink);right:auto;width:0}
+.ctrl{display:flex;gap:6px;align-items:center}
+.ctrl button{width:36px;height:36px;border-radius:50%;border:0;box-shadow:inset 0 0 0 1px var(--line);background:rgba(255,255,255,.7);color:var(--ink);cursor:pointer;display:grid;place-items:center;backdrop-filter:blur(12px);transition:background .3s}
+.ctrl button:hover{background:#fff}
+.ctrl svg{width:14px;height:14px;fill:currentColor}
+.top{position:absolute;top:0;left:0;right:0;z-index:21;padding:clamp(18px,3vh,30px) clamp(18px,4vw,48px);display:flex;justify-content:space-between;align-items:center}
+.top .brand{font-size:12px;letter-spacing:.3em;text-transform:uppercase;font-weight:600;color:var(--ink)}
+.top a{font-size:13px;color:var(--mute);transition:color .3s}
+.top a:hover{color:var(--ink)}
+.cue{position:absolute;left:50%;bottom:clamp(56px,9vh,84px);transform:translateX(-50%);z-index:9;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute);opacity:0;transition:opacity .8s}
+.film.done .cue{opacity:1}
+
+/* ---------- LANDING ---------- */
+section.pg{padding:clamp(90px,16vh,180px) clamp(20px,6vw,80px);max-width:1180px;margin:0 auto}
+.band{background:var(--paper)}
+.lead{font-size:clamp(30px,4.8vw,64px);font-weight:600;letter-spacing:-.042em;line-height:1.07;max-width:15em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:clamp(48px,9vh,96px)}
+.cell{background:var(--soft);border-radius:26px;padding:clamp(28px,3.4vw,42px);transition:transform .6s var(--ease),box-shadow .6s var(--ease)}
+.cell:hover{transform:translateY(-4px);box-shadow:0 30px 60px -30px rgba(0,0,0,.18)}
+.cell .k{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--amber);margin-bottom:28px;font-weight:600}
+.cell h3{font-size:clamp(20px,2vw,25px);font-weight:600;letter-spacing:-.028em;margin-bottom:10px}
+.cell p{color:var(--mute);font-size:15px;line-height:1.55}
+.cta{text-align:center}
+.cta .lead{margin:0 auto 38px;text-align:center}
+.cta .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+footer{border-top:1px solid var(--line);padding:30px clamp(20px,6vw,80px);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mute);letter-spacing:.02em;background:var(--bg)}
+.reveal{opacity:0;transform:translateY(40px);filter:blur(8px);transition:opacity 1.2s var(--ease),transform 1.2s var(--ease),filter 1.2s var(--ease)}
+.reveal.in{opacity:1;transform:none;filter:blur(0)}
+
+@media (max-width:640px){
+  .top a{display:none}
+  .wave{height:96px;gap:4px}
+}
+@media (prefers-reduced-motion:reduce){
+  .scene,.scene.on{transition-duration:.01s}
+}
+</style>
+</head>
+<body>
+
+<header class="film" id="film">
+  <div class="top">
+    <span class="brand">Chang IT Solution</span>
+    <a href="#more">Explore</a>
+  </div>
+
+  <div class="gate" id="gate">
+    <img src="icon.jpg" alt="ScriptVault">
+    <p class="eyebrow">The launch film</p>
+    <h1 class="h2">ScriptVault</h1>
+    <p class="sub">The private home for every script you write.</p>
+    <button class="btn" id="start"><svg viewBox="0 0 12 12"><path d="M2.5 1v10a.5.5 0 0 0 .77.42l8-5a.5.5 0 0 0 0-.84l-8-5A.5.5 0 0 0 2.5 1z"/></svg>Watch the film</button>
+    <p class="hint">Sound on · 60 seconds</p>
+  </div>
+
+  <!-- data-dur: scene length (ms) · data-vo: when the voiceover starts (ms) -->
+  <div class="scene s1" data-dur="5000" data-vo="1300">
+    <div class="mark"></div>
+    <div class="eyebrow r" style="--d:1s">Chang IT Solution</div>
+    <div class="sub r" style="--d:2.4s;margin-top:18px">presents</div>
+  </div>
+
+  <div class="scene s2" data-dur="6600" data-vo="500">
+    <h1 class="h1">
+      <span class="r" style="--d:.4s">Every great video</span>
+      <span class="r" style="--d:1.1s">starts as a script.</span>
+      <span class="r dim" style="--d:3.4s;margin-top:.3em">Yours are everywhere.</span>
+    </h1>
+  </div>
+
+  <div class="scene s3" data-dur="5600" data-vo="1300" data-boom="700">
+    <div class="icon-wrap"><img src="icon.jpg" alt="ScriptVault"></div>
+    <div class="eyebrow r" style="--d:1.3s">Introducing</div>
+    <h1 class="h1 grad r" style="--d:2.2s;margin-top:.15em">ScriptVault</h1>
+  </div>
+
+  <div class="scene s4" data-dur="9000" data-vo="900">
+    <div class="dial-frame"><img src="icon.jpg" alt=""></div>
+    <div class="cap">
+      <h2 class="h2"><span class="r" style="--d:.9s;display:inline-block">Private.</span> <span class="r" style="--d:1.6s;display:inline-block">Offline.</span> <span class="r gold" style="--d:2.3s;display:inline-block">Yours.</span></h2>
+      <p class="sub r" style="--d:3.4s;margin:14px auto 0">No account. No cloud. Every word stays on your phone.</p>
+    </div>
+  </div>
+
+  <div class="scene s5" data-dur="6000" data-vo="700">
+    <div class="phone">
+      <div class="p-title">Scripts</div>
+      <div class="p-card" style="--i:0"><b>Why nobody finishes a hook</b><i></i><i></i><i></i><em class="tag t-prog">In progress</em></div>
+      <div class="p-card" style="--i:1"><b>5 tools I stopped paying for</b><i></i><i></i><i></i><em class="tag t-done">Completed</em></div>
+      <div class="p-card" style="--i:2"><b>Morning routine, honest take</b><i></i><i></i><i></i><em class="tag t-new">Not started</em></div>
+      <div class="p-card" style="--i:3"><b>Budget phone vs flagship</b><i></i><i></i><i></i><em class="tag t-prog">In progress</em></div>
+    </div>
+    <h2 class="h2 r" style="--d:1s;margin-top:5.5vh">Write it. <span class="dim">Organised.</span></h2>
+  </div>
+
+  <div class="scene s6" data-dur="8000" data-vo="500">
+    <div class="wave" aria-hidden="true"></div>
+    <h2 class="h2 r" style="--d:.5s">Speak it.</h2>
+    <p class="sub r" style="--d:2.6s;margin-top:14px">Voice and video notes, attached to the script they belong to.</p>
+  </div>
+
+  <div class="scene s7" data-dur="9600" data-vo="500">
+    <div class="eyebrow r" style="--d:.3s;margin-bottom:5vh">Built-in AI</div>
+    <div class="ai-list">
+      <div style="--t:2.1s">Enhance.</div>
+      <div style="--t:2.9s">Add hooks.</div>
+      <div style="--t:3.8s">Sharpen the CTA.</div>
+      <div style="--t:5.3s">Find the trend.</div>
+    </div>
+    <div class="models r" style="--d:6.6s"><span>Gemini</span><span>Claude</span><span>GPT</span><span>Your key</span></div>
+  </div>
+
+  <div class="scene s8" data-dur="6200" data-vo="400">
+    <div class="ring">
+      <svg viewBox="0 0 200 200"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><circle class="bg" cx="100" cy="100" r="90"/><circle class="fg" cx="100" cy="100" r="90"/></svg>
+      <div class="num"><span id="cnt">0</span><small>%</small></div>
+    </div>
+    <h2 class="h2"><span class="r" style="--d:.4s;display:inline-block">Set goals.</span> <span class="r dim" style="--d:1.3s;display:inline-block">Track deadlines.</span></h2>
+    <p class="sub r" style="--d:2.6s;margin-top:14px;color:var(--ink);font-weight:500">Finish what you start.</p>
+  </div>
+
+  <div class="scene s9" data-dur="0" data-vo="900" data-boom="300">
+    <div class="icon-wrap"><img src="icon.jpg" alt=""></div>
+    <h1 class="h1 grad r" style="--d:.7s">ScriptVault</h1>
+    <p class="sub r" style="--d:2.1s;margin-top:14px">The private home for every script you write.</p>
+    <a class="btn r" style="--d:3.4s" href="#get">Get early access</a>
+    <p class="eyebrow r" style="--d:4.6s;margin-top:4.5vh">A Chang IT Solution product</p>
+  </div>
+
+  <div class="cue">Scroll</div>
+  <div class="grain"></div>
+
+  <div class="hud">
+    <div class="bars" id="bars"></div>
+    <div class="ctrl">
+      <button id="snd" aria-label="Mute"></button>
+      <button id="pp" aria-label="Pause"></button>
+      <button id="rp" aria-label="Replay"><svg viewBox="0 0 14 14"><path d="M7 2.5a4.5 4.5 0 1 1-4.3 5.8.75.75 0 1 0-1.43.45A6 6 0 1 0 2.5 3.4V2a.75.75 0 0 0-1.5 0v3.25c0 .41.34.75.75.75H5a.75.75 0 0 0 0-1.5H3.56A4.48 4.48 0 0 1 7 2.5z"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main id="more">
+  <div class="band">
+    <section class="pg">
+      <p class="eyebrow reveal" style="margin-bottom:26px">Built for creators</p>
+      <h2 class="lead reveal">For the people who write the video <span class="dim">before the video.</span></h2>
+      <div class="grid">
+        <div class="cell reveal"><div class="k">Write</div><h3>Every script, one vault</h3><p>Titles, notes, references, status and categories. Search anything in a second.</p></div>
+        <div class="cell reveal"><div class="k">Capture</div><h3>Voice &amp; video notes</h3><p>Record an idea the moment it lands. It stays attached to its script.</p></div>
+        <div class="cell reveal"><div class="k">Create</div><h3>AI, your way</h3><p>Enhance, add hooks, fix tone, trim or expand. Bring your own model and key.</p></div>
+        <div class="cell reveal"><div class="k">Ship</div><h3>Goals &amp; deadlines</h3><p>A progress ring, a calendar and a to-do list that keep you on schedule.</p></div>
+        <div class="cell reveal"><div class="k">Private</div><h3>Offline first</h3><p>No sign-up, no server. Your work lives on your device, ready to export.</p></div>
+        <div class="cell reveal"><div class="k">Calm</div><h3>Light or dark</h3><p>A quiet interface that follows your system, day or night.</p></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="pg cta" id="get">
+    <p class="eyebrow reveal" style="margin-bottom:26px">Coming soon</p>
+    <h2 class="lead reveal">Your scripts deserve a vault.</h2>
+    <div class="row reveal">
+      <a class="btn" href="#get">Get early access</a>
+      <a class="btn ghost" href="#film" id="again">Watch again</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>© 2026 Chang IT Solution</span>
+  <span>ScriptVault</span>
+</footer>
+
+<script>
+(function(){
+  const film=document.getElementById('film');
+  const scenes=[...film.querySelectorAll('.scene')];
+  const barsEl=document.getElementById('bars');
+  const pp=document.getElementById('pp'), rp=document.getElementById('rp'), snd=document.getElementById('snd');
+  const ICON={
+    pause:'<svg viewBox="0 0 14 14"><rect x="2.5" y="1.5" width="3" height="11" rx="1"/><rect x="8.5" y="1.5" width="3" height="11" rx="1"/></svg>',
+    play:'<svg viewBox="0 0 14 14"><path d="M3.5 1.6v10.8a.6.6 0 0 0 .92.5l8.4-5.4a.6.6 0 0 0 0-1L4.42 1.1a.6.6 0 0 0-.92.5z"/></svg>',
+    on:'<svg viewBox="0 0 14 14"><path d="M6.4 1.6 3.3 4.3H1.2a.5.5 0 0 0-.5.5v4.4c0 .28.22.5.5.5h2.1l3.1 2.7a.4.4 0 0 0 .66-.3V1.9a.4.4 0 0 0-.66-.3zM9.2 4.3a.6.6 0 0 1 .84.1 4.3 4.3 0 0 1 0 5.2.6.6 0 1 1-.96-.72 3.1 3.1 0 0 0 0-3.76.6.6 0 0 1 .12-.82zm1.9-1.7a.6.6 0 0 1 .84.04 6.8 6.8 0 0 1 0 8.72.6.6 0 1 1-.9-.8 5.6 5.6 0 0 0 0-7.12.6.6 0 0 1 .06-.84z"/></svg>',
+    off:'<svg viewBox="0 0 14 14"><path d="M6.4 1.6 3.3 4.3H1.2a.5.5 0 0 0-.5.5v4.4c0 .28.22.5.5.5h2.1l3.1 2.7a.4.4 0 0 0 .66-.3V1.9a.4.4 0 0 0-.66-.3zM9.4 4.9a.6.6 0 0 1 .85 0l1.1 1.1 1.1-1.1a.6.6 0 1 1 .85.85L12.2 6.9l1.1 1.1a.6.6 0 1 1-.85.85l-1.1-1.1-1.1 1.1a.6.6 0 1 1-.85-.85l1.1-1.1-1.1-1.1a.6.6 0 0 1 0-.85z"/></svg>'
+  };
+
+  /* ---------------- audio ---------------- */
+  let ctx, master, musicBus, verb, voBus, voBufs=[], voSrc=null, muted=false, musicTimer;
+
+  function impulse(sec){
+    const n=ctx.sampleRate*sec, b=ctx.createBuffer(2,n,ctx.sampleRate);
+    for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3.2)}
+    return b;
+  }
+  function initAudio(){
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain(); master.gain.value=.95;
+    const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-12; comp.ratio.value=3;
+    master.connect(comp).connect(ctx.destination);
+    verb=ctx.createConvolver(); verb.buffer=impulse(3.4);
+    const wet=ctx.createGain(); wet.gain.value=.55; verb.connect(wet).connect(master);
+    musicBus=ctx.createGain(); musicBus.gain.value=0;
+    musicBus.connect(master); musicBus.connect(verb);
+    voBus=ctx.createGain(); voBus.gain.value=1; voBus.connect(master);
+    // load narration
+    scenes.forEach((_,i)=>{
+      const src=(window.VO_INLINE&&VO_INLINE[i])||('vo/s'+(i+1)+'.m4a');
+      fetch(src).then(r=>r.arrayBuffer()).then(a=>ctx.decodeAudioData(a)).then(b=>voBufs[i]=b).catch(()=>{});
+    });
+  }
+
+  // soft pad progression: Fmaj9 · Am7 · Cmaj7 · G6sus
+  const CHORDS=[[87.31,130.81,164.81,196,220],[110,164.81,196,261.63],[130.81,196,246.94,329.63],[98,146.83,220,293.66]];
+  function chord(fs,t,len){
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=820; lp.Q.value=.4; lp.connect(musicBus);
+    fs.forEach(f=>{
+      const g=ctx.createGain(), peak=.05/fs.length;
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(peak,t+2.6);
+      g.gain.setValueAtTime(peak,t+len); g.gain.linearRampToValueAtTime(0,t+len+3.2);
+      g.connect(lp);
+      [['sine',0],['triangle',6],['sine',-5]].forEach(([type,det])=>{
+        const o=ctx.createOscillator(); o.type=type; o.frequency.value=f; o.detune.value=det;
+        o.connect(g); o.start(t); o.stop(t+len+3.4);
+      });
+    });
+  }
+  function startMusic(){
+    clearInterval(musicTimer);
+    let k=0, next=ctx.currentTime+.05;
+    const step=()=>{ while(next<ctx.currentTime+1.5){ chord(CHORDS[k%4],next,7); next+=7.5; k++; } };
+    step(); musicTimer=setInterval(step,400);
+    musicBus.gain.cancelScheduledValues(ctx.currentTime);
+    musicBus.gain.setValueAtTime(musicBus.gain.value,ctx.currentTime);
+    musicBus.gain.linearRampToValueAtTime(1,ctx.currentTime+3);
+  }
+  function duck(on){
+    const t=ctx.currentTime; musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setValueAtTime(musicBus.gain.value,t);
+    musicBus.gain.linearRampToValueAtTime(on?.45:1,t+(on?.35:1.4));
+  }
+  function noise(sec){
+    const b=ctx.createBuffer(1,ctx.sampleRate*sec,ctx.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; return b;
+  }
+  function whoosh(){
+    if(!ctx) return; const t=ctx.currentTime;
+    const s=ctx.createBufferSource(); s.buffer=noise(1.6);
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.4;
+    bp.frequency.setValueAtTime(300,t); bp.frequency.exponentialRampToValueAtTime(2400,t+.7); bp.frequency.exponentialRampToValueAtTime(600,t+1.5);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05,t+.6); g.gain.linearRampToValueAtTime(0,t+1.5);
+    s.connect(bp).connect(g); g.connect(master); g.connect(verb); s.start(t);
+  }
+  function boom(){
+    if(!ctx) return; const t=ctx.currentTime;
+    const o=ctx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(72,t); o.frequency.exponentialRampToValueAtTime(34,t+1.8);
+    const g=ctx.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.55,t+.04); g.gain.exponentialRampToValueAtTime(.0001,t+2.2);
+    o.connect(g).connect(master); o.start(t); o.stop(t+2.3);
+    // shimmer
+    [1046.5,1567.98,2093].forEach((f,k)=>{
+      const s=ctx.createOscillator(); s.frequency.value=f;
+      const sg=ctx.createGain(); sg.gain.setValueAtTime(0,t); sg.gain.linearRampToValueAtTime(.014/(k+1),t+.08); sg.gain.exponentialRampToValueAtTime(.0001,t+3.4);
+      s.connect(sg); sg.connect(verb); sg.connect(master); s.start(t); s.stop(t+3.5);
+    });
+  }
+  function playVO(i){
+    stopVO(); const b=voBufs[i]; if(!b) return;
+    voSrc=ctx.createBufferSource(); voSrc.buffer=b; voSrc.connect(voBus);
+    duck(true); const me=voSrc; me.onended=()=>{ if(voSrc===me){voSrc=null;duck(false)} };
+    voSrc.start();
+  }
+  function stopVO(){ if(voSrc){ const s=voSrc; voSrc=null; try{s.stop()}catch(e){} duck(false); } }
+
+  /* ---------------- visuals ---------------- */
+  const wave=film.querySelector('.wave');
+  for(let i=0;i<41;i++){
+    const s=document.createElement('span'), env=Math.sin((i/40)*Math.PI);
+    s.style.setProperty('--k',i); s.style.setProperty('--h',(16+env*(40+Math.random()*55))+'px');
+    wave.appendChild(s);
+  }
+  const fills=scenes.map((_,i)=>{
+    const b=document.createElement('button'), f=document.createElement('i');
+    b.setAttribute('aria-label','Scene '+(i+1)); b.appendChild(f);
+    b.onclick=()=>{ if(started){ setPaused(false); go(i); } };
+    barsEl.appendChild(b); return f;
+  });
+
+  let cur=-1, elapsed=0, last=0, paused=false, started=false, counter=0, cues=[];
+
+  function go(i){
+    stopVO();
+    if(cur>=0 && cur!==i){
+      const p=scenes[cur]; p.classList.remove('on'); p.classList.add('out');
+      setTimeout(()=>p.classList.remove('out'),1300);
+      whoosh();
+    }
+    cur=i; elapsed=0;
+    const s=scenes[i];
+    s.classList.remove('out','on'); void s.offsetWidth; s.classList.add('on');
+    fills.forEach((f,k)=>f.style.width=k<i?'100%':'0');
+    const end=i===scenes.length-1;
+    film.classList.toggle('done',end); if(end) fills[i].style.width='100%';
+    cues=[{at:+s.dataset.vo||0,fn:()=>playVO(i)}];
+    if(s.dataset.boom) cues.push({at:+s.dataset.boom,fn:boom});
+    countUp(s);
+  }
+
+  function countUp(s){
+    cancelAnimationFrame(counter);
+    const c=s.querySelector('#cnt'); if(!c) return;
+    let t=0, prev=performance.now();
+    (function tick(n){
+      if(!paused) t+=n-prev; prev=n;
+      const k=Math.min(1,Math.max(0,(t-500)/3600)), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+      c.textContent=Math.round(e*78);
+      if(k<1) counter=requestAnimationFrame(tick);
+    })(prev);
+  }
+
+  function loop(t){
+    if(started && !paused && cur>=0){
+      elapsed+=t-last;
+      cues.forEach(c=>{ if(!c.done && elapsed>=c.at){ c.done=1; c.fn(); } });
+      const d=+scenes[cur].dataset.dur;
+      if(d>0){
+        fills[cur].style.width=Math.min(100,elapsed/d*100)+'%';
+        if(elapsed>=d && cur<scenes.length-1) go(cur+1);
+      }
+    }
+    last=t; requestAnimationFrame(loop);
+  }
+
+  function setPaused(p){
+    paused=p; film.classList.toggle('paused',p);
+    pp.innerHTML=p?ICON.play:ICON.pause; pp.setAttribute('aria-label',p?'Play':'Pause');
+    if(ctx) p?ctx.suspend():ctx.resume();
+  }
+  function setMuted(m){
+    muted=m; snd.innerHTML=m?ICON.off:ICON.on; snd.setAttribute('aria-label',m?'Unmute':'Mute');
+    if(master) master.gain.setTargetAtTime(m?0:.95,ctx.currentTime,.08);
+  }
+
+  document.getElementById('start').onclick=()=>{
+    initAudio(); ctx.resume(); startMusic();
+    started=true; film.classList.add('started');
+    document.getElementById('gate').classList.add('hide');
+    setTimeout(()=>go(0),400);
+  };
+  pp.onclick=()=>setPaused(!paused);
+  snd.onclick=()=>setMuted(!muted);
+  rp.onclick=()=>{ setPaused(false); go(0); };
+  document.getElementById('again').addEventListener('click',()=>setTimeout(()=>{
+    if(!started) return document.getElementById('start').click();
+    setPaused(false); go(0);
+  },500));
+  addEventListener('keydown',e=>{
+    if(!started) return;
+    if(e.code==='Space' && scrollY<innerHeight*.5){ e.preventDefault(); setPaused(!paused); }
+    if(e.code==='ArrowRight') go(Math.min(scenes.length-1,cur+1));
+    if(e.code==='ArrowLeft') go(Math.max(0,cur-1));
+    if(e.key==='m') setMuted(!muted);
+  });
+  new IntersectionObserver(([en])=>{ if(started && !en.isIntersecting) setPaused(true); },{threshold:.15}).observe(film);
+
+  const io=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }),{threshold:.2});
+  document.querySelectorAll('.reveal').forEach((el,i)=>{ el.style.transitionDelay=(i%3)*90+'ms'; io.observe(el); });
+
+  pp.innerHTML=ICON.pause; snd.innerHTML=ICON.on;
+  requestAnimationFrame(t=>{ last=t; loop(t); });
+  window.__sv={go,setPaused,setMuted};
+})();
+</script>
+</body>
+</html>
